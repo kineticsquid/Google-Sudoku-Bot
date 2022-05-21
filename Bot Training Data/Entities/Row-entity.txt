@@ -1,0 +1,40 @@
+Pycharm
+
+flask_hw2.py
+/usr/local/bin/python3.9 /Users/johnkellerman/DevelopmentEnvironment/temp/flask_hw2.py
+Hello World!
+__name__ = __main__
+ * Serving Flask app 'flask_hw2' (lazy loading)
+ * Environment: production
+   WARNING: This is a development server. Do not use it in a production deployment.
+   Use a production WSGI server instead.
+ * Debug mode: on
+ * Running on all addresses.
+   WARNING: This is a development server. Do not use it in a production deployment.
+ * Running on http://192.168.1.93:8080/ (Press CTRL+C to quit)
+ * Restarting with stat
+Hello World!
+__name__ = __main__
+ * Debugger is active!
+ * Debugger PIN: 138-280-463
+
+/hw/flask_hw.py
+/usr/local/bin/python3.9 /Users/johnkellerman/DevelopmentEnvironment/temp/hw/flask_hw.py
+/hw/Hello World!
+__name__ = __main__
+ * Serving Flask app 'flask_hw' (lazy loading)
+ * Environment: production
+   WARNING: This is a development server. Do not use it in a production deployment.
+   Use a production WSGI server instead.
+ * Debug mode: on
+ * Running on all addresses.
+   WARNING: This is a development server. Do not use it in a production deployment.
+ * Running on http://192.168.1.93:8080/ (Press CTRL+C to quit)
+ * Restarting with stat
+/hw/Hello World!
+__name__ = __main__
+ * Debugger is active!
+ * Debugger PIN: 138-280-463
+
+ Visual Studio Code
+
