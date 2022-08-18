@@ -1,0 +1,1 @@
+r"(www|http:|https:)+[^\\s]+[\\w]"

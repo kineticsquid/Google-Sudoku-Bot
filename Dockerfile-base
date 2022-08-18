@@ -1,0 +1,16 @@
+# Using 4.1.0 explicitly because as of 6/15, 4.1.1 did not have required certs installed
+# FROM clearlinux/tesseract-ocr:4.1.0
+FROM clearlinux/tesseract-ocr:5
+
+# Set the working directory to /app
+WORKDIR /app
+
+RUN swupd bundle-add python3-basic
+RUN swupd bundle-add curl
+RUN swupd bundle-add opencv-python
+RUN swupd bundle-add devpkg-leptonica --skip-diskspace-check
+
+ADD requirements.txt /app
+RUN python -m pip install -r requirements.txt
+RUN pip3 install opencv-python==4.5.5.64
+RUN pip3 list

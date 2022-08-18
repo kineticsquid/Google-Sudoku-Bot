@@ -1,0 +1,19 @@
+<html>
+<head>
+  <base href="/">
+  <title>Sudoku Bot</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+<h1>Redis Content</h1>
+<ul>
+    {% for file in files %}
+    <li>
+        <a href="/redis{{file}}">
+            {{file}}
+        </a>
+    </li>
+    {% endfor %}
+</ul>
+</body>
+</html>

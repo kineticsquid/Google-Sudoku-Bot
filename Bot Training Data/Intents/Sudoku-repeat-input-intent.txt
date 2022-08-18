@@ -1,0 +1,8 @@
+input matrix
+starting puzzle
+tell me the current input puzzle
+What is my input puzzle
+what is my input puzzle now?
+What is the input matrix
+what's my current input
+what's the puzzle I'm solving?

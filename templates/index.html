@@ -1,0 +1,46 @@
+<html>
+<head>
+  <base href="/">
+  <title>Sudoku Bot</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+<h1>Sudoku Bot</h1>
+<ul>
+    <li><a href="/build">Build</a></li>
+    <li><a href="/redis">Redis Content</a></li>
+    <li><a href="/clear_redis">Clear Redis</a></li>
+    <li>Test Images:
+      <ul>
+        <li><a href="/converse?image=https://i.imgur.com/T2kpHZc.png">https://i.imgur.com/T2kpHZc.png</a></li>
+        <li><a href="/converse?image=https://i.imgur.com/EPDP5eL.jpg">https://i.imgur.com/EPDP5eL.jpg</a></li>
+        <li><a href="/converse?image=https://i.imgur.com/PFwpFbK.jpg">https://i.imgur.com/PFwpFbK.jpg</a></li>
+        <li><a href="/converse?image=https://i.imgur.com/hHzcWLq.png">https://i.imgur.com/hHzcWLq.png</a></li>
+        <li><a href="/converse?image=https://i.imgur.com/PFwpFbK.jpg">https://i.imgur.com/PFwpFbK.jpg</a></li>
+        <li><a href="/converse?image=https://i.imgur.com/RU1DVER.png">https://i.imgur.com/RU1DVER.png</a></li>
+        <li><a href="/converse?image=https://i.imgur.com/Fum8e7m.jpg">https://i.imgur.com/Fum8e7m.jpg</a></li>
+        <li><a href="/converse?image=https://i.imgur.com/8K00fcA.jpg">https://i.imgur.com/8K00fcA.jpg</a></li>
+      </ul>
+    </li>
+</ul>
+<h2>Converse</h2>
+<div>
+  <form action="/converse" method="post" novalidate>
+      <input autofocus type="text" id="text_input" name="text_input" placeholder="Your input text">
+      <button type="submit"><b>Submit</b></button>
+  </form>
+</div>
+<div>
+<h3>
+  You said:
+</h3>
+{{input}}
+<h3>
+  The bot responded:
+</h3>
+<pre>
+{{response|safe}}
+</pre>
+</div>
+</body>
+</html>
