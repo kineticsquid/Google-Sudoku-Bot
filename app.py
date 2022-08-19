@@ -707,9 +707,9 @@ def process_input_image(conversation_response, session_id, bw_input_puzzle_image
                 if response.status_code == 200:
                     results = response.json()
                     set_context(session_id, PUZZLE_SOLUTION_MATRIX, results)
-                    send_sms(conversation_response, 'I\'ve solved your puzzle.\n%s' % get_insulting_name())
+                    send_sms(conversation_response, 'I have a solution this puzzle.\n%s' % get_insulting_name())
                 else:
-                    send_sms(conversation_response, 'I can\'t solve your puzzle, through no fault of my own.\n%s' % get_insulting_name())
+                    send_sms(conversation_response, 'I can\'t solve this puzzle, through no fault of my own.\n%s' % get_insulting_name())
                     if get_context(session_id, PUZZLE_SOLUTION_MATRIX) is not None:
                         delete_context(session_id, PUZZLE_SOLUTION_MATRIX)
 
@@ -763,9 +763,9 @@ def process_input_image(conversation_response, session_id, bw_input_puzzle_image
             if response.status_code == 200:
                 results = response.json()
                 set_context(session_id, PUZZLE_SOLUTION_MATRIX, results)
-                add_response_text(conversation_response, ['I\'ve solved your puzzle.'])
+                add_response_text(conversation_response, ['I have a solution to this puzzle.'])
             else:
-                add_response_text(conversation_response, ['I can\'t solve your puzzle, through no fault of my own.'])
+                add_response_text(conversation_response, ['I can\'t solve this puzzle, through no fault of my own.'])
                 if get_context(session_id, PUZZLE_SOLUTION_MATRIX) is not None:
                     delete_context(session_id, PUZZLE_SOLUTION_MATRIX)
 
