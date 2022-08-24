@@ -215,9 +215,13 @@ def sms_reply():
         conversation_response['sms_from'] = from_number
         conversation_response = process_conversation_turn(conversation_response, session_id)
         msg = resp.message(conversation_response['answer'])
-        image = conversation_response.get(IMAGE_URL)
-        if image is not None:
-            msg.media(image)
+        images = conversation_response.get(IMAGE_URL)
+        if images is not None:
+            if isinstance(images, list):
+                for i in images:
+                    msg.media(i)
+            else:
+                msg.media(images)
     else:
         resp.message('%s\n%s' % (get_response_text_for(I_CANT_HEAR_YOU),get_response_text_for(INSULTING_NAME)))
     log('SMS Response:')
@@ -383,6 +387,11 @@ def process_conversation_turn(conversation_response, session_id):
         conversation_response = solve_puzzle(conversation_response, session_id)
     elif conversation_response[ACTION] == START_OVER:
         conversation_response = start_over(conversation_response, session_id)
+    elif conversation_response[ACTION] == WHAT_ARE_YOUR_CAPABILITIES:
+        conversation_response[IMAGE_URL] = [
+            'https://i.imgur.com/hHzcWLq.png',
+            'https://i.imgur.com/agkUm86.jpg'
+        ]
     
     answer = conversation_response[ANSWER]
     if answer is not None and len(answer) > 0:
@@ -785,6 +794,15 @@ def process_input_image(conversation_response, session_id, bw_input_puzzle_image
                 add_response_text(conversation_response, [get_response_text_for(I_CANT_SOLVE_YOUR_PUZZLE)])
             if get_context(session_id, PUZZLE_SOLUTION_MATRIX) is not None:
                 delete_context(session_id, PUZZLE_SOLUTION_MATRIX)
+    else:
+        if from_number is not None:
+            send_sms(conversation_response, '%s\n%s' % (get_response_text_for(I_CANT_SOLVE_YOUR_PUZZLE),get_response_text_for(INSULTING_NAME)))
+            conversation_response[ANSWER] = ''
+            conversation_response[IMAGE_URL] = None
+        else:
+            add_response_text(conversation_response, [get_response_text_for(I_CANT_SOLVE_YOUR_PUZZLE)])
+        if get_context(session_id, PUZZLE_SOLUTION_MATRIX) is not None:
+            delete_context(session_id, PUZZLE_SOLUTION_MATRIX)
 
     return conversation_response
 

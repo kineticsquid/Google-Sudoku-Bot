@@ -325,7 +325,7 @@ def get_cell_boundaries(image, flask_app=None):
         # width (height). We're only looking for gaps up to a multiple of 3 valid widths because anything larger points
         # to bigger issues.
 
-        if len(new_coords) < 9:
+        if 1 < len(new_coords) < 9:
             i = 1
             while True:
                 gap = new_coords[i][0] - new_coords[i - 1][1]
@@ -364,7 +364,7 @@ def get_cell_boundaries(image, flask_app=None):
 
         # This is similar to the previous but looks for cell coordinates that define a gap that is 2X or 3X the
         # the expected width (Height), meaning we missed a line within a potential cell.
-        if len(new_coords) < 9:
+        if 1 < len(new_coords) < 9:
             i = 1
             while True:
                 gap = new_coords[i][1] - new_coords[i][0]
@@ -394,7 +394,7 @@ def get_cell_boundaries(image, flask_app=None):
         # a row or column at either end probably because of noise that split the row/column. Try to identify
         # a missing row/column at the beginning of the x or y axis
         #
-        if len(new_coords) < 9:
+        if 1 < len(new_coords) < 9:
             possible_new_entry = None
             for i in range(first_coord_entry_used-1, -1, -1):
                 if possible_new_entry is None:
@@ -417,7 +417,7 @@ def get_cell_boundaries(image, flask_app=None):
 
         # If we're still too short, try to identify a missing row/column at the end of the x/y axis. Note
         # this part of the code has not been tested yet for lack of a use case matrix
-        if len(new_coords) < 9:
+        if 1 < len(new_coords) < 9:
             possible_new_entry = None
             for i in range(last_coord_entry_used+1, len(coords)):
                 if possible_new_entry is None:
@@ -461,10 +461,12 @@ def get_cell_boundaries(image, flask_app=None):
     log('y coords before refactoring: %s' % y_coords, flask_app)
 
     log("Refactor y coordinates", flask_app)
-    y_coords = refactor_coords(y_coords, y_coord_deltas)
+    if len(y_coords) > 0:
+        y_coords = refactor_coords(y_coords, y_coord_deltas)
 
     log("Refactor x coordinates", flask_app)
-    x_coords = refactor_coords(x_coords, x_coord_deltas)
+    if len(x_coords) > 0:
+        x_coords = refactor_coords(x_coords, x_coord_deltas)
 
     log('x coords after refactoring: %s' % x_coords, flask_app)
     log('y coords after refactoring: %s' % y_coords, flask_app)
@@ -698,7 +700,7 @@ def apply_matrix_to_image(matrix, image, x_y_coords, show_coordinates=True):
                 if matrix[row][column] != 0:
                     text(matrix[row][column], row, column)
 
-    if show_coordinates:
+    if show_coordinates and len(x_y_coords[0]) > 1 and len(x_y_coords[1]) > 1:
         avg_line_width_total = 0
         count = 0
         for x in range(len(x_y_coords[0])-1):
