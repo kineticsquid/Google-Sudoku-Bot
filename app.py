@@ -2,6 +2,7 @@
 Bot to solve Sudoku puzzles
 """
 import os
+from socket import IPV6_DONTFRAG
 import sys
 import logging
 from twilio.rest import Client
@@ -32,7 +33,7 @@ CHECK_VALUE = 'check.value'
 INPUT_UNKNOWN = 'input.unknown'
 WELCOME = 'welcome'
 DONT_CALL_ME_THAT = 'dont.call.me.that'
-DONT_CALL_ME_THAT_FALLBACK = 'dontcallmethat.dontcallmethat-fallback'
+DONT_CALL_ME_THAT_FALLBACK = 'dont.call.me.that.fallback'
 GIVE_ME_A_HINT = 'give.me.a.hint'
 GIVE_ME_THE_ANSWER = 'give.me.the.answer'
 GIVE_ME_THE_INPUT_PUZZLE = 'give.me.the.input.puzzle'
@@ -77,7 +78,33 @@ PUZZLE_ACTION = 'puzzle_action'
 PUZZLE_ASYNC_JOB_ID = 'puzzle_async_job_id'
 PUZZLE_CALL_ME = 'puzzle_call_me'
 INPUT_IMAGE_ID = 'input_image_id'
-REQUEST_HOST = 'requesst_host'
+REQUEST_HOST = 'request_host'
+
+INSULTING_NAME = 'INSULTING_NAME'
+I_HAVE_AN_ANSWER = 'I_HAVE_AN_ANSWER'
+I_CANT_SOLVE_YOUR_PUZZLE = 'I_CANT_SOLVE_YOUR_PUZZLE'
+I_CANT_FIND_YOUR_INPUT = 'I_CANT_FIND_YOUR_INPUT'
+I_WILL_NOW_CALL_YOU = 'I_WILL_NOW_CALL_YOU'
+I_DONT_HAVE_A_PUZZLE = 'I_DONT_HAVE_A_PUZZLE'
+I_HAVENT_SOLVED_THE_PUZZLE = 'I_HAVENT_SOLVED_THE_PUZZLE'
+TA_DA = 'TA_DA'
+I_CANT_HEAR_YOU = 'I_CANT_HEAR_YOU'
+I_DONT_HAVE_SOMETHING_TO_FIX = 'I_DONT_HAVE_SOMETHING_TO_FIX'
+I_NEED_ROW_AND_COLUMN_TO_FIX = 'I_NEED_ROW_AND_COLUMN_TO_FIX'
+I_NEED_ROW_COLUMN_AND_NEW_VALUE_TO_FIX = 'I_NEED_ROW_COLUMN_AND_NEW_VALUE_TO_FIX'
+I_NEED_ROW_AND_COLUMN_TO_HINT = 'I_NEED_ROW_AND_COLUMN_TO_HINT'
+I_NEED_ROW_COLUMN_AND_NEW_VALUE_TO_HINT = 'I_NEED_ROW_COLUMN_AND_NEW_VALUE_TO_HINT'
+ROW_COLUMN_IS_ALREADY = 'ROW_COLUMN_IS_ALREADY'
+ROW_COLUMN_IS_NOW = 'ROW_COLUMN_IS_NOW'
+YOU_NEED_TO_ASK_ME_TO_SOLVE = 'YOU_NEED_TO_ASK_ME_TO_SOLVE'
+ROW_COLUMN_IS = 'ROW_COLUMN_IS'
+ROW_COLUMN_IS_NOT = 'ROW_COLUMN_IS_NOT'
+THISLL_JUST_BE_A_MINUTE = 'THISLL_JUST_BE_A_MINUTE'
+IVE_ALREADY_SOLVED_IT = 'IVE_ALREADY_SOLVED_IT'
+I_ALREADY_HAVE_A_PUZZLE = 'I_ALREADY_HAVE_A_PUZZLE'
+IVE_SOLVED_YOUR_PUZZLE = 'IVE_SOLVED_YOUR_PUZZLE'
+I_DONT_RECOGNIZE_YOUR_IMAGE = 'I_DONT_RECOGNIZE_YOUR_IMAGE'
+HUH = 'HUH'
 
 REDIS_TTL = 3600
 MAX_IMAGE_HEIGHT = 1280
@@ -192,7 +219,7 @@ def sms_reply():
         if image is not None:
             msg.media(image)
     else:
-        resp.message('Speak up, I can\'t hear you.\n%s' % get_insulting_name())
+        resp.message('%s\n%s' % (get_response_text_for(I_CANT_HEAR_YOU),get_response_text_for(INSULTING_NAME)))
     log('SMS Response:')
     log(str(resp))
     return str(resp)
@@ -214,6 +241,7 @@ def sms_test():
 
 @flask_app.route('/sms-retry',methods = ['POST', 'GET'])
 def sms_retry():
+    # Used for debugging when responses to Tiwlio exceed time limit.
     values = request.values
     resp = MessagingResponse()
     if len(values) > 0:
@@ -356,10 +384,12 @@ def process_conversation_turn(conversation_response, session_id):
     elif conversation_response[ACTION] == START_OVER:
         conversation_response = start_over(conversation_response, session_id)
     
-    if get_context(session_id, PUZZLE_CALL_ME) is not None:
-        add_response_text(conversation_response, [get_context(session_id, PUZZLE_CALL_ME)])
-    else:
-        add_response_text(conversation_response, [get_insulting_name()])
+    answer = conversation_response[ANSWER]
+    if answer is not None and len(answer) > 0:
+        if get_context(session_id, PUZZLE_CALL_ME) is not None:
+            add_response_text(conversation_response, [get_context(session_id, PUZZLE_CALL_ME)])
+        else:
+            add_response_text(conversation_response, [get_response_text_for(INSULTING_NAME)])
     return conversation_response
 
 def ordinal_to_integer(entity):
@@ -403,8 +433,7 @@ def get_column_location(input_text):
 
 def fix_input_matrix(conversation_response, session_id):
     if get_context(session_id, PUZZLE_INPUT_MATRIX) is None:
-        solution_processing_message = 'I don\'t yet have an input matrix to fix.'
-        set_response_text(conversation_response, [solution_processing_message])
+        set_response_text(conversation_response, [get_response_text_for(I_DONT_HAVE_SOMETHING_TO_FIX)])
     else:
         if len(conversation_response[PARAMETERS][ENTITY_ROW]) > 0:
             row = True
@@ -425,11 +454,9 @@ def fix_input_matrix(conversation_response, session_id):
         else:
             empty_entity = 0
         if row is False or column is False:
-            solution_processing_message = 'I need both a row and column number to fix your input.'
-            set_response_text(conversation_response, [solution_processing_message])
+            set_response_text(conversation_response, [get_response_text_for(I_NEED_ROW_AND_COLUMN_TO_FIX)])
         elif len(ordinal_numbers) + len(numbers) + empty_entity != 3 or (len(numbers) + empty_entity) == 0:
-            solution_processing_message = 'I need a row, a column, and a new value to fix your input.'
-            set_response_text(conversation_response, [solution_processing_message])
+            set_response_text(conversation_response, [get_response_text_for(I_NEED_ROW_COLUMN_AND_NEW_VALUE_TO_FIX)])
         else:
             row_location = get_row_location(conversation_response[INPUT])
             column_location = get_column_location(conversation_response[INPUT])
@@ -500,29 +527,27 @@ def fix_input_matrix(conversation_response, session_id):
             input = get_context(session_id, PUZZLE_INPUT_MATRIX)
             current_value = input[row_value-1][column_value-1]
             if current_value == new_value:
-                solution_processing_message = 'Row %s column %s is already %s' % (row_value, column_value, new_value)
+                solution_processing_message = get_response_text_for(ROW_COLUMN_IS_ALREADY) % (row_value, column_value, new_value)
                 set_response_text(conversation_response, [solution_processing_message])
             else:
                 input[row_value-1][column_value-1] = new_value
                 set_context(session_id, PUZZLE_INPUT_MATRIX, input)
-                solution_processing_message = 'Row %s column %s is now %s' % (row_value, column_value, new_value)
+                solution_processing_message = get_response_text_for(ROW_COLUMN_IS_NOW) % (row_value, column_value, new_value)
                 set_response_text(conversation_response, [solution_processing_message])
                 if get_context(session_id, PUZZLE_SOLUTION_MATRIX) is not None:
                     delete_context(session_id, PUZZLE_SOLUTION_MATRIX)
                     delete_context(session_id, PUZZLE_SOLUTION_IMAGE_URL)
                 conversation_response = provide_input_matrix(conversation_response, session_id)
-                conversation_response = handle_url_input(conversation_response, session_id)
+                # conversation_response = handle_url_input(conversation_response, session_id)
             
     return conversation_response
 
 def provide_hint(conversation_response, session_id):
 
     if get_context(session_id, PUZZLE_INPUT_MATRIX) is None:
-        solution_processing_message = 'I don\'t have a matrix to solve, let alone a solution to provide a hint to.'
-        set_response_text(conversation_response, [solution_processing_message])
+        set_response_text(conversation_response, [get_response_text_for(I_DONT_HAVE_A_PUZZLE)])
     elif get_context(session_id, PUZZLE_SOLUTION_MATRIX) is None:
-        solution_processing_message = 'You need to ask me to solve the puzzle first before you can ask for a hint.'
-        set_response_text(conversation_response, [solution_processing_message])
+        set_response_text(conversation_response, [get_response_text_for(YOU_NEED_TO_ASK_ME_TO_SOLVE)])
     else:
         if len(conversation_response[PARAMETERS][ENTITY_ROW]) > 0:
             row = True
@@ -538,14 +563,11 @@ def provide_hint(conversation_response, session_id):
             ordinal_numbers.append(ordinal_to_integer(ordinal))
         numbers = conversation_response[PARAMETERS][ENTITY_NUMBER]
         if row is False or column is False:
-            solution_processing_message = 'I need both a row and column number to provide a hint.'
-            set_response_text(conversation_response, [solution_processing_message])
+            set_response_text(conversation_response, [get_response_text_for(I_NEED_ROW_AND_COLUMN_TO_HINT)])
         elif len(ordinal_numbers) + len(numbers) < 2:
-            solution_processing_message = 'I need both a row and column number to provide a hint.'
-            set_response_text(conversation_response, [solution_processing_message])
+            set_response_text(conversation_response, [get_response_text_for(I_NEED_ROW_AND_COLUMN_TO_HINT)])
         elif len(ordinal_numbers) + len(numbers) > 3:
-            solution_processing_message = 'I only need a row, a column, and optionally a guess to provide a hint, not % numbers.' % (len(ordinal_numbers) + len(numbers))
-            set_response_text(conversation_response, [solution_processing_message])
+            set_response_text(conversation_response, [get_response_text_for(I_NEED_ROW_COLUMN_AND_NEW_VALUE_TO_HINT)])
         else:
             row_location = get_row_location(conversation_response[INPUT])
             column_location = get_column_location(conversation_response[INPUT])
@@ -618,14 +640,14 @@ def provide_hint(conversation_response, session_id):
             solution = get_context(session_id, PUZZLE_SOLUTION_MATRIX)
             answer_value = solution[row_value-1][column_value-1]
             if guess_value is None:
-                solution_processing_message = 'Row %s column %s is %s' % (row_value, column_value, answer_value)
+                solution_processing_message = get_response_text_for(ROW_COLUMN_IS) % (row_value, column_value, answer_value)
                 set_response_text(conversation_response, [solution_processing_message])
             else:
                 if answer_value == guess_value:
-                    solution_processing_message = 'Row %s column %s is %s' % (row_value, column_value, guess_value)
+                    solution_processing_message = get_response_text_for(ROW_COLUMN_IS) % (row_value, column_value, guess_value)
                     set_response_text(conversation_response, [solution_processing_message])
                 else:
-                    solution_processing_message = 'Row %s column %s is not %s' % (row_value, column_value, guess_value)
+                    solution_processing_message = get_response_text_for(ROW_COLUMN_IS_NOT) % (row_value, column_value, guess_value)
                     set_response_text(conversation_response, [solution_processing_message])
     
     return conversation_response
@@ -696,22 +718,6 @@ def process_input_image(conversation_response, session_id, bw_input_puzzle_image
         # thread. 
         if done_event is not None:
             done_event.set()
-            provide_input_matrix(conversation_response, session_id)
-            puzzle_input_matrix = get_context(session_id, PUZZLE_INPUT_MATRIX)
-            if puzzle_input_matrix is not None and sum_matrix(puzzle_input_matrix) > 0:
-                http_headers = {'Content-Type': 'application/json',
-                        'Accept': 'application/json'}
-                data = json.dumps({'inputMatrix': get_context(session_id, PUZZLE_INPUT_MATRIX)})
-                response = requests.post(SUDOKU_SOLVER_URL + 'getSolution', headers=http_headers,
-                                        data=data)
-                if response.status_code == 200:
-                    results = response.json()
-                    set_context(session_id, PUZZLE_SOLUTION_MATRIX, results)
-                    send_sms(conversation_response, 'I have a solution this puzzle.\n%s' % get_insulting_name())
-                else:
-                    send_sms(conversation_response, 'I can\'t solve this puzzle, through no fault of my own.\n%s' % get_insulting_name())
-                    if get_context(session_id, PUZZLE_SOLUTION_MATRIX) is not None:
-                        delete_context(session_id, PUZZLE_SOLUTION_MATRIX)
 
     def random_response():
 
@@ -735,12 +741,12 @@ def process_input_image(conversation_response, session_id, bw_input_puzzle_image
         return responses[random_index]
 
     def spew_messages(done_event):
-        send_sms(conversation_response, "OK, this\'ll just be a minute.\n%s" % get_insulting_name())
+        send_sms(conversation_response, get_response_text_for(THISLL_JUST_BE_A_MINUTE) % get_response_text_for(INSULTING_NAME))
         time.sleep(TIME_SLEEP_INTERVAL)
         while not done_event.is_set():
-            send_sms(conversation_response, "%s\n%s" % (random_response(), get_insulting_name()))
+            send_sms(conversation_response, "%s\n%s" % (random_response(), get_response_text_for(INSULTING_NAME)))
             time.sleep(TIME_SLEEP_INTERVAL)
-            return
+        return
 
     from_number = conversation_response.get('sms_from')
     if from_number is not None:
@@ -752,22 +758,33 @@ def process_input_image(conversation_response, session_id, bw_input_puzzle_image
         process_image(done)
     else:
         process_image()
-        conversation_response = provide_input_matrix(conversation_response, session_id)
-        puzzle_input_matrix = get_context(session_id, PUZZLE_INPUT_MATRIX)
-        if puzzle_input_matrix is not None and sum_matrix(puzzle_input_matrix) > 0:
-            http_headers = {'Content-Type': 'application/json',
-                    'Accept': 'application/json'}
-            data = json.dumps({'inputMatrix': get_context(session_id, PUZZLE_INPUT_MATRIX)})
-            response = requests.post(SUDOKU_SOLVER_URL + 'getSolution', headers=http_headers,
-                                    data=data)
-            if response.status_code == 200:
-                results = response.json()
-                set_context(session_id, PUZZLE_SOLUTION_MATRIX, results)
-                add_response_text(conversation_response, ['I have a solution to this puzzle.'])
+
+    conversation_response = provide_input_matrix(conversation_response, session_id)
+    puzzle_input_matrix = get_context(session_id, PUZZLE_INPUT_MATRIX)
+    if puzzle_input_matrix is not None and sum_matrix(puzzle_input_matrix) > 0:
+        http_headers = {'Content-Type': 'application/json',
+                'Accept': 'application/json'}
+        data = json.dumps({'inputMatrix': get_context(session_id, PUZZLE_INPUT_MATRIX)})
+        response = requests.post(SUDOKU_SOLVER_URL + 'getSolution', headers=http_headers,
+                                data=data)
+        if response.status_code == 200:
+            results = response.json()
+            set_context(session_id, PUZZLE_SOLUTION_MATRIX, results)
+            if from_number is not None:
+                send_sms(conversation_response, '%s\n%s' % (get_response_text_for(I_HAVE_AN_ANSWER),get_response_text_for(INSULTING_NAME)))
+                conversation_response[ANSWER] = ''
+                conversation_response[IMAGE_URL] = None
             else:
-                add_response_text(conversation_response, ['I can\'t solve this puzzle, through no fault of my own.'])
-                if get_context(session_id, PUZZLE_SOLUTION_MATRIX) is not None:
-                    delete_context(session_id, PUZZLE_SOLUTION_MATRIX)
+                add_response_text(conversation_response, [get_response_text_for(I_HAVE_AN_ANSWER)])
+        else:
+            if from_number is not None:
+                send_sms(conversation_response, '%s\n%s' % (get_response_text_for(I_CANT_SOLVE_YOUR_PUZZLE),get_response_text_for(INSULTING_NAME)))
+                conversation_response[ANSWER] = ''
+                conversation_response[IMAGE_URL] = None
+            else:
+                add_response_text(conversation_response, [get_response_text_for(I_CANT_SOLVE_YOUR_PUZZLE)])
+            if get_context(session_id, PUZZLE_SOLUTION_MATRIX) is not None:
+                delete_context(session_id, PUZZLE_SOLUTION_MATRIX)
 
     return conversation_response
 
@@ -824,7 +841,7 @@ def provide_input_matrix(conversation_response, session_id):
             processed_input_image_url = generate_matrix_image(session_id, input_matrix, filename)
             conversation_response[IMAGE_URL] = processed_input_image_url
         else:
-            set_response_text(conversation_response, ['I don\'t yet have a puzzle to solve for you.'])
+            set_response_text(conversation_response, [get_response_text_for(I_DONT_HAVE_A_PUZZLE)])
     else:
         # Input came as a texted image or a url to an image
         input_image_bytes = runtime_cache.get(input_image_url)
@@ -866,10 +883,10 @@ def generate_matrix_image(session_id, input_matrix, filename, input_image=None,
 
 def solve_puzzle(conversation_response, session_id):
     if get_context(session_id, PUZZLE_SOLUTION_MATRIX) is not None:
-        set_response_text(conversation_response, ['I\'ve already solved your puzzle. You can ask me to start over.'])
+        set_response_text(conversation_response, [get_response_text_for(IVE_ALREADY_SOLVED_IT)])
     else:
         if get_context(session_id, PUZZLE_INPUT_MATRIX) is  None:
-            set_response_text(conversation_response, ['I need a matrix to solve first!'])
+            set_response_text(conversation_response, [get_response_text_for(I_DONT_HAVE_A_PUZZLE)])
         else:
             http_headers = {'Content-Type': 'application/json',
                     'Accept': 'application/json'}
@@ -879,9 +896,9 @@ def solve_puzzle(conversation_response, session_id):
             if response.status_code == 200:
                 results = response.json()
                 set_context(session_id, PUZZLE_SOLUTION_MATRIX, results)
-                add_response_text(conversation_response, ['Hah, I\'ve solved your puzzle.'])
+                add_response_text(conversation_response, [get_response_text_for(IVE_SOLVED_YOUR_PUZZLE)])
             else:
-                add_response_text(conversation_response, ['I can\'t solve your puzzle, through no fault of my own.'])
+                add_response_text(conversation_response, [get_response_text_for(I_CANT_SOLVE_YOUR_PUZZLE)])
                 if get_context(session_id, PUZZLE_SOLUTION_MATRIX) is not None:
                     delete_context(session_id, PUZZLE_SOLUTION_MATRIX)   
 
@@ -889,12 +906,12 @@ def solve_puzzle(conversation_response, session_id):
 
 def handle_url_input(conversation_response, session_id):
     if get_context(session_id, PUZZLE_SOLUTION_MATRIX) is not None:
-        set_response_text(conversation_response, ['I\'ve already solved your puzzle. You can ask me to start over.'])
+        set_response_text(conversation_response, [get_response_text_for(IVE_ALREADY_SOLVED_IT)])
     else:
         input_puzzle_url = conversation_response[PARAMETERS].get(ENTITY_URL)
         if input_puzzle_url is not None and len(input_puzzle_url) > 0:
             if get_context(session_id, PUZZLE_INPUT_MATRIX) is not None:
-                set_response_text(conversation_response, ['I already have a puzzle to solve. You can ask me to solve this one or to start over.'])
+                set_response_text(conversation_response, [get_response_text_for(I_ALREADY_HAVE_A_PUZZLE)])
             else:
                 log('Retreiving input image \'%s\'.' % input_puzzle_url)
                 response = requests.get(input_puzzle_url)
@@ -909,17 +926,16 @@ def handle_url_input(conversation_response, session_id):
                     if bw_input_puzzle_image is None:
                         # This means the file or page was not a valid image
                         add_response_text(conversation_response,
-                        ['I\'m sorry, I don\'t recognize your input as an image. If it\'s a GIF, we don\'t do GIFs, they\'re for losers.'])
+                        [get_response_text_for(I_DONT_RECOGNIZE_YOUR_IMAGE)])
                     else:
                         process_input_image(conversation_response, session_id, bw_input_puzzle_image)
                 else:
                     log('%s error retreiving input image \'%s\'.' % (response.status_code, input_puzzle_url))
                     add_response_text(conversation_response,
-                              ['I\'m sorry. I had a problem understanding the matrix image you sent - HTTP %s error' % response.status_code])
+                              [get_response_text_for(I_DONT_RECOGNIZE_YOUR_IMAGE)])
 
         else:
-            add_response_text(conversation_response,
-                          ['I\'m sorry. I seem to have misplaced your input matrix.'])            
+            add_response_text(conversation_response, [get_response_text_for(HUH)])          
 
     return conversation_response
 
@@ -929,12 +945,12 @@ def provide_solution_matrix(conversation_response, session_id):
     solution_image_url = get_context(session_id, PUZZLE_SOLUTION_IMAGE_URL)
     answer_message = None
     if input_matrix is None:
-        answer_message = 'I don\'t yet have a puzzle to solve for you. Give me a little help here'
+        answer_message = get_response_text_for(I_DONT_HAVE_A_PUZZLE)
     elif solution_matrix is None:
-        answer_message = 'You haven\'t yet asked me to solve your puzzle. Duh.'
+        answer_message = get_response_text_for(I_HAVENT_SOLVED_THE_PUZZLE)
     elif solution_image_url is not None:
         conversation_response[IMAGE_URL] = solution_image_url
-        answer_message = 'Ta Da!'
+        answer_message = get_response_text_for(TA_DA)
     else:
         filename = '%s.%s.png' % (get_context(session_id, INPUT_IMAGE_ID), 'solution')
 
@@ -953,7 +969,7 @@ def provide_solution_matrix(conversation_response, session_id):
                                                        solution_matrix=solution_matrix)
         conversation_response[IMAGE_URL] = solution_image_url
         set_context(session_id, PUZZLE_SOLUTION_IMAGE_URL, solution_image_url)
-        answer_message = 'Ta Da!'
+        answer_message = get_response_text_for(TA_DA)
 
 
     set_response_text(conversation_response, [answer_message])
@@ -977,7 +993,7 @@ def call_me(conversation_response, session_id):
         new_call_me = person_entity.get(ENTITY_PERSON_NAME)
     if new_call_me is not None and len(new_call_me) > 0:
         set_context(session_id, PUZZLE_CALL_ME, new_call_me)
-        set_response_text(conversation_response, ['Fine. I will now call you \'%s\'.' % new_call_me])
+        set_response_text(conversation_response, [get_response_text_for(I_WILL_NOW_CALL_YOU) % new_call_me])
     else:
         input_text = conversation_response[INPUT]
         if input_text is not None and len(input_text) > 0:
@@ -991,15 +1007,15 @@ def call_me(conversation_response, session_id):
                 new_call_me = input_text
             new_call_me = new_call_me.strip()
             set_context(session_id, PUZZLE_CALL_ME, new_call_me)
-            set_response_text(conversation_response, ['Fine. I will now call you \'%s\'.' % new_call_me])
+            set_response_text(conversation_response, [get_response_text_for(I_WILL_NOW_CALL_YOU) % new_call_me])
         else:
-            set_response_text(conversation_response, ['Huh, what did you say?'])
+            set_response_text(conversation_response, [get_response_text_for(HUH)])
     return conversation_response
 
 def call_me_fallback(conversation_response, session_id):
     new_call_me = conversation_response[INPUT].strip()
     set_context(session_id, PUZZLE_CALL_ME, new_call_me)
-    set_response_text(conversation_response, ['Fine. I will now call you \'%s\'.' % new_call_me])
+    set_response_text(conversation_response, [get_response_text_for(I_WILL_NOW_CALL_YOU) % new_call_me])
     return conversation_response
 
 def set_response_text(conversation_response, list_of_texts):
@@ -1049,11 +1065,195 @@ def delete_context(session_id, key):
         context.pop(key)
     put_context_to_redis(session_id, context)
 
-def get_insulting_name():
-    names = ['Fartface', 'Dick nose', 'Butthead', 'Dumb ass', 'Bonehead',
-                    'Dipshit', 'Shithead', 'Doofus']
-    choice = int(random.random() * len(names))
-    return names[choice]
+def get_response_text_for(text_response_type):
+    if text_response_type == INSULTING_NAME:
+        values = [
+            'Fartface', 'Dick nose', 'Butthead', 'Dumb ass', 'Bonehead',
+            'Dipshit', 'Shithead', 'Doofus']
+    elif text_response_type == TA_DA:
+        values = ['Ta Da!', 'Viola!', 'Hold the applause', '[mic drop]', 'Woo Hoo!']
+    elif text_response_type == I_CANT_HEAR_YOU:
+        values = [
+            'Speak up, I can\'t hear you.',
+            'What\'d you say?',
+            'Speak louder.',
+            'I\'m not hearing you.',
+            'Huh?']
+    elif text_response_type == I_HAVE_AN_ANSWER:
+        values = [
+            'I have an answer to this puzzle.',
+            'I know the solution to this.',
+            'That was easy, I know the answer.',
+            'I have a solution to this.',
+            'I know the answer to this puzzle.'
+        ]
+    elif text_response_type == I_CANT_SOLVE_YOUR_PUZZLE:
+        values = [
+            'I can\'t solve your puzzle, through no fault of mine',
+            'That\'s a bogus puzzle.',
+            'Even Einstein couldn\'t solve your stupid puzzle.',
+            'Get a real puzzle.',
+            'Even with my super powers, your puzzle is beyond hope.'
+        ]
+    elif text_response_type == I_DONT_HAVE_SOMETHING_TO_FIX:
+        values = [
+            'I don\'t have a matrix to fix.',
+            'I need your input first. I don\' have anything to fix.',
+            'Give me your input first.',
+            'You\'re questioning my integrity before you\'ve given me something to solve.',
+            'I don\'t yet have anything from you to fix.'
+        ]
+    elif text_response_type == I_NEED_ROW_AND_COLUMN_TO_FIX:
+        values = [
+            'I need both a row and column number to fix your input.',
+            'If you want me to fix your input, I need both a row and column.',
+            'I\'m assuming you want me to fix your input. I need row and column.',
+            'Which row AND column?',
+            'Both row and column please.'
+        ]
+    elif text_response_type == I_NEED_ROW_AND_COLUMN_TO_HINT:
+        values = [
+            'I need both a row and column number to provide a hint.',
+            'If you want a hint, I need a row and column.',
+            'I\'m assuming you want a hint. I need row and column.',
+            'Which row AND column?',
+            'Both row and column please.'
+        ]
+    elif text_response_type == I_NEED_ROW_COLUMN_AND_NEW_VALUE_TO_FIX:
+        values = [
+            'I need a row, column, and new value only to fix your matrix.',
+            'Three numbers please, row, column, and new value.',
+            'I don\'t have a magic eight ball; row, column, and new value, please.',
+            'I don\'t have a ouiji board; give me a row, column, and new value to fix your input.',
+            'If you want me to fix your input, give me the row column and new value.'
+        ]
+    elif text_response_type == I_NEED_ROW_COLUMN_AND_NEW_VALUE_TO_HINT:
+        values = [
+            'I need a row, column, your guess only.',
+            'Three numbers please, row, column, and your guess.',
+            'I don\'t have a magic eight ball; row, column, and suspected value, please.',
+            'I don\'t have a ouiji board; give me a row, column, and your guess.',
+            'If you want a hint, give me the row column and your guess.'
+        ]
+    elif text_response_type == ROW_COLUMN_IS_ALREADY:
+        values = [
+            'Row %s column %s is already %s.',
+            'Row %s column %s currently is %s.',
+            'Nothing to fix here, row %s column %s is %s.',
+            'Row %s column %s is %s.',
+            'Cell %s, %s is %s, duh.'
+        ]
+    elif text_response_type == ROW_COLUMN_IS_NOW:
+        values = [
+            'Row %s column %s is now %s.',
+            'I\'ve made row %s column %s %s.',
+            'Fixed! Cell %s %s is now %s.',
+            'Cell %s %s is now %s. Please do better next time.',
+            'Row %s column %s is changed to %s.'
+        ]
+    elif text_response_type == I_DONT_HAVE_A_PUZZLE:
+        values = [
+            'I don\'t yet have a puzzle to solve for you.',
+            'You haven\'t yet given me a puzzle to solve.',
+            'I first need your input.',
+            'I don\'t yet have a puzzle to solve for you. Give me a little help here',
+            'You gotta give me something to work with first.',
+            'I first need the puzzle you want me to solve.'
+        ]
+    elif text_response_type == YOU_NEED_TO_ASK_ME_TO_SOLVE:
+        values = [
+            'You need to ask me to solve the puzzle first before you can ask for a hint.',
+            'Before I can give you a hint, you need to ask me to solve the puzzle.',
+            'I need to solve the puzzle first and you haven\'t asked me to.',
+            'I\'ve no hints for you because I haven\'t solved the puzzle.',
+            'Ask me to solve the puzzle first'
+        ]
+    elif text_response_type == I_HAVENT_SOLVED_THE_PUZZLE:
+        values = [
+            'I first need to solve the puzzle.',
+            'You need to ask me to solve the puzzle.',
+            'I need to solve the puzzle first and you haven\'t asked me to.',
+            'I haven\'t solved the puzzle yet.',
+            'Ask me to solve the puzzle first'
+        ]
+    elif text_response_type == ROW_COLUMN_IS:
+        values = [
+            'Row %s column %s is %s.',
+            'The answer to row %s column %s is %s.',
+            'Cell %s %s is %s.',
+            'The value in row %s column %s is %s.',
+            'Puzzle row %s column %s is %s.'
+        ]
+    elif text_response_type == ROW_COLUMN_IS_NOT:
+        values = [
+            'Row %s column %s is not %s.',
+            'The answer to row %s column %s is not %s.',
+            'Cell %s %s is not %s.',
+            'The value in row %s column %s is not %s.',
+            'Puzzle row %s column %s is not %s.'          
+        ]
+    elif text_response_type == THISLL_JUST_BE_A_MINUTE:
+        values = [
+            'OK, this\'ll just be a minute.\n%s',
+            'I got this, one moment.\n%s',
+            'Give me a second to work on this.\n%s',
+            'One moment please.\n%s',
+            'Right. Give me a minute to figure this out.\n%s'
+        ]
+    elif text_response_type == IVE_ALREADY_SOLVED_IT:
+        values = [
+            'I\'ve already solved your puzzle. You can ask me to start over.',
+            'I\'ve solved this. Ask me to start over if you want a new puzzle.',
+            'I already know this answer. Ask me to start over if you want.',
+            'I\'ve solve this already. You can ask me to start over.',
+            'Duh, I already know this answer. Ask me to start over if you want.'
+        ]
+    elif text_response_type == I_ALREADY_HAVE_A_PUZZLE:
+        values = [
+            'I already have a puzzle to solve. You can ask me to solve this or start over.',
+            'I think you\'re trying to give me a puzzle to solve and I already have one.',
+            'I have an input puzzle. I can solve this or I can start over.',
+            'You\'ve already given me a puzzle to solve. I can solve this one or start over.',
+            'I have your input. I can start again or solve what you\'ve given me.'
+        ]
+    elif text_response_type == IVE_SOLVED_YOUR_PUZZLE:
+        values = [
+            'Hah, I\'ve solved your puzzle.',
+            'I have it, I know the answer!', 
+            'Done. That was easy peasy.',
+            'Finished. Give me something a bit harder next time.',
+            'I know that answer, not terribly surprising though.'
+        ]
+    elif text_response_type == I_DONT_RECOGNIZE_YOUR_IMAGE:
+        values = [
+            'I\'m sorry, I don\'t recognize your input as an image. If it\'s a GIF, we don\'t do GIFs, they\'re for losers.',
+            'That\'s not an image (GIFs don\'t count).',
+            'I don\'t see an image in your input. I don\'t do GIFs.',
+            'I need a better image from you. BTW, GIFs are for losers.',
+            'I don\'t understand your input at all, it may be because it\'s a GIF.'
+        ]
+    elif text_response_type == I_WILL_NOW_CALL_YOU:
+        values = [
+            'Fine. I will now call you \'%s\'.',
+            'OK, you will now be called \'%s\'.',
+            'Right. Henceforth you shall be \'%s\'.',
+            'Right. From now on you shall be know as \'%s\'.',
+            'Got it. Your name is now \'%s\'.'
+        ]
+    elif text_response_type == HUH:
+        values = [
+            'Huh, what did you say?',
+            'What?',
+            'I don\'t understand',
+            'I didn\'t get that.',
+            'Come again?'
+        ]
+    elif text_response_type == I_CANT_FIND_YOUR_INPUT:
+        values = [
+            ''
+        ]
+    choice = int(random.random() * len(values))
+    return values[choice]
 
 def send_sms(conversation_response, msg):
     from_number = conversation_response.get('sms_from')
