@@ -1,11 +1,8 @@
-<html>
-<head>
-  <base href="/">
-  <title>Sudoku Bot</title>
-  <link rel="stylesheet" href="/static/css/style.css">
-</head>
-<body>
-<h1>Redis Content</h1>
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Sudoku Bot</h1>
+<h2>Redis Content</h2>
 <ul>
     {% for file in files %}
     <li>
@@ -15,5 +12,4 @@
     </li>
     {% endfor %}
 </ul>
-</body>
-</html>
+{% endblock %}

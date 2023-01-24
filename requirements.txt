@@ -8,3 +8,4 @@ pytesseract
 analytics-python
 gunicorn
 google-cloud-dialogflow
+flask_sock

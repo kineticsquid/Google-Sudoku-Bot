@@ -7,7 +7,7 @@ import sys
 import logging
 from twilio.rest import Client
 from twilio.twiml.messaging_response import MessagingResponse
-from flask import Flask, request, jsonify, render_template, Response, abort
+from flask import Flask, request, jsonify, render_template, Response, abort, redirect, url_for, make_response
 from threading import Thread, Event
 import random
 import requests
@@ -180,22 +180,88 @@ def add_links(json_string):
         json_string = json_string.replace(match, match_with_link)
     return json_string
 
-@flask_app.route('/converse',methods = ['POST', 'GET'])
-def converse():
-    
+@flask_app.route('/',methods = ['POST', 'GET'])
+def index():
     session_id = request.headers['Host'].replace(':','.')
-    parms = request.args
-    image_parm = parms.get('image')
-    if image_parm is not None:
-        text = image_parm
+    if request.method == 'GET':
+        conversation_response = call_dialogflow('Hi', session_id)
+        conversation_response = process_conversation_turn(conversation_response, session_id)
+        add_to_transcript(session_id, conversation_response, greeting=True)
     else:
         form = request.form
-        text = form['text_input']
-    conversation_response = call_dialogflow(text, session_id)
-    conversation_response = process_conversation_turn(conversation_response, session_id)
-    response_json = json.dumps(conversation_response, indent=4)
-    json_with_links = add_links(response_json)
-    return render_template('index.html', input=text, response=json_with_links)
+        text = form.get('text_input')
+        conversation_response = call_dialogflow(text, session_id)
+        conversation_response = process_conversation_turn(conversation_response, session_id)
+        add_to_transcript(session_id, conversation_response)
+    transcript_html = render_transcript(session_id)
+    return render_template('index.html', transcript=transcript_html)
+
+@flask_app.route('/debug',methods = ['POST', 'GET'])
+def debug():
+    if request.method == 'GET':
+        parms = request.args
+        image_parm = parms.get('image')
+        if image_parm is not None:
+            text = image_parm
+        else:
+            form = request.form
+            if form is not None:
+                text = form.get('text_input')
+            else:
+                text = None
+    else:
+        form = request.form
+        text = form.get('text_input')
+    if text is None:
+        return render_template('debug.html')
+    else:
+        session_id = request.headers['Host'].replace(':','.')
+        conversation_response = call_dialogflow(text, session_id)
+        conversation_response = process_conversation_turn(conversation_response, session_id)
+        response_json = json.dumps(conversation_response, indent=4)
+        json_with_links = add_links(response_json)
+        add_to_transcript(session_id, conversation_response)
+        return render_template('debug.html', input=text, response=json_with_links)
+
+def add_to_transcript(session_id, conversation_response, greeting=False):
+    transcript = get_transcript(session_id)
+    if transcript is None:
+        transcript = []
+    if not greeting:
+        transcript.append({
+            'who': 'you',
+            'text': conversation_response[INPUT],
+            'image': None
+        })
+    image_url = conversation_response.get(IMAGE_URL)
+    if image_url is not None:
+        transcript.append({
+            'who': 'bot',
+            'text': conversation_response[ANSWER],
+            'image': image_url
+        })
+    else:
+        transcript.append({
+            'who': 'bot',
+            'text': conversation_response[ANSWER],
+            'image': None
+        })
+    save_transcript(session_id, transcript)
+
+def get_transcript(session_id):
+    transcript = get_context(session_id, 'transcript')
+    return transcript
+
+def save_transcript(session_id, transcript):
+    set_context(session_id, 'transcript', transcript)
+
+def render_transcript(session_id):
+    transcript = get_transcript(session_id)
+    html='<table>'
+    for item in transcript:
+        html = '%s\n\t%s' % (html, render_template('transcript.html', who=item['who'], text=item['text'], image=item['image']))
+    html = html + '\n</table>'
+    return html
 
 @flask_app.route('/sms',methods = ['POST', 'GET'])
 def sms_reply():
@@ -310,9 +376,6 @@ def clear_redis():
     # return Response('Removed %s redis entries' % number_of_entries, mimetype='text/text', status=200)
     return 'Removed %s redis entries' % number_of_entries
 
-@flask_app.route('/')
-def index():
-    return render_template('index.html')
 
 def call_dialogflow(text, session_id):
     log('Session %s calling DialogFlow with \'%s\'.' % (session_id, text))
@@ -387,11 +450,6 @@ def process_conversation_turn(conversation_response, session_id):
         conversation_response = solve_puzzle(conversation_response, session_id)
     elif conversation_response[ACTION] == START_OVER:
         conversation_response = start_over(conversation_response, session_id)
-    elif conversation_response[ACTION] == WHAT_ARE_YOUR_CAPABILITIES:
-        conversation_response[IMAGE_URL] = [
-            'https://i.imgur.com/hHzcWLq.png',
-            'https://i.imgur.com/agkUm86.jpg'
-        ]
     
     answer = conversation_response[ANSWER]
     if answer is not None and len(answer) > 0:
@@ -1107,7 +1165,7 @@ def get_response_text_for(text_response_type):
         ]
     elif text_response_type == I_CANT_SOLVE_YOUR_PUZZLE:
         values = [
-            'I can\'t solve your puzzle, through no fault of mine',
+            'I can\'t solve your puzzle, through no fault of mine.',
             'That\'s a bogus puzzle.',
             'Even Einstein couldn\'t solve your stupid puzzle.',
             'Get a real puzzle.',
@@ -1184,7 +1242,7 @@ def get_response_text_for(text_response_type):
             'Before I can give you a hint, you need to ask me to solve the puzzle.',
             'I need to solve the puzzle first and you haven\'t asked me to.',
             'I\'ve no hints for you because I haven\'t solved the puzzle.',
-            'Ask me to solve the puzzle first'
+            'Ask me to solve the puzzle first.'
         ]
     elif text_response_type == I_HAVENT_SOLVED_THE_PUZZLE:
         values = [
@@ -1237,10 +1295,10 @@ def get_response_text_for(text_response_type):
     elif text_response_type == IVE_SOLVED_YOUR_PUZZLE:
         values = [
             'Hah, I\'ve solved your puzzle.',
-            'I have it, I know the answer!', 
-            'Done. That was easy peasy.',
-            'Finished. Give me something a bit harder next time.',
-            'I know that answer, not terribly surprising though.'
+            'I have it, I know the answer to your silly puzzle!', 
+            'Done. That was easy peasy. I have an answer to your puzzle.',
+            'Finished with your puzzle. Give me something a bit harder next time.',
+            'I know the answer to that puzzle, not terribly surprising though.'
         ]
     elif text_response_type == I_DONT_RECOGNIZE_YOUR_IMAGE:
         values = [
@@ -1262,7 +1320,7 @@ def get_response_text_for(text_response_type):
         values = [
             'Huh, what did you say?',
             'What?',
-            'I don\'t understand',
+            'I don\'t understand.',
             'I didn\'t get that.',
             'Come again?'
         ]

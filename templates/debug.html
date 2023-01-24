@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Sudoku Bot</h1>
+<ul>
+    <li><a href="/build">Build</a></li>
+    <li><a href="/redis">Redis Content</a></li>
+    <li><a href="/clear_redis">Clear Redis</a></li>
+    <li>Test Images:
+      <ul>
+        <li><a href="/debug?image=https://i.imgur.com/T2kpHZc.png">https://i.imgur.com/T2kpHZc.png</a></li>
+        <li><a href="/debug?image=https://i.imgur.com/EPDP5eL.jpg">https://i.imgur.com/EPDP5eL.jpg</a></li>
+        <li><a href="/debug?image=https://i.imgur.com/PFwpFbK.jpg">https://i.imgur.com/PFwpFbK.jpg</a></li>
+        <li><a href="/debug?image=https://i.imgur.com/hHzcWLq.png">https://i.imgur.com/hHzcWLq.png</a></li>
+        <li><a href="/debug?image=https://i.imgur.com/PFwpFbK.jpg">https://i.imgur.com/PFwpFbK.jpg</a></li>
+        <li><a href="/debug?image=https://i.imgur.com/RU1DVER.png">https://i.imgur.com/RU1DVER.png</a></li>
+        <li><a href="/debug?image=https://i.imgur.com/Fum8e7m.jpg">https://i.imgur.com/Fum8e7m.jpg</a></li>
+        <li><a href="/debug?image=https://i.imgur.com/8K00fcA.jpg">https://i.imgur.com/8K00fcA.jpg</a></li>
+        <li><a href="/debug?image=https://i.imgur.com/QoM6UFQ.gif">https://i.imgur.com/QoM6UFQ.gif</a></li>
+        <li><a href="/debug?image=https://i.imgur.com/D419E4g.jpg">https://i.imgur.com/D419E4g.jpg</a></li>
+      </ul>
+    </li>
+</ul>
+<h2>Converse</h2>
+<div>
+  <form action="/debug" method="post" novalidate>
+      <input autofocus type="text" id="text_input" name="text_input" placeholder="Your input text">
+  </form>
+</div>
+<div>
+<h3>
+  You said:
+</h3>
+{{input}}
+<h3>
+  The bot responded:
+</h3>
+<pre>
+{{response|safe}}
+</pre>
+</div>
+{% endblock %}

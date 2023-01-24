@@ -1,0 +1,19 @@
+<tr>
+    <td>
+        {% if who == "bot" %}
+        <img src="static/images/bot.jpg" width="25" height="25" style="background-color:#aaaaaa;">
+        {% else %}
+        <img src="static/images/you.jpg" width="25" height="25" style="background-color:#aaaaaa;">
+        {% endif %} 
+    </td>
+    <td>
+        {{text}}
+        {% if image != None %}
+            <br>
+            <a href="{{image}}">
+                <img src="{{image}}" width="200" height="200" style="padding-top: 10px; background-color:#aaaaaa;">
+            </a>
+        {% endif %}
+    </td>
+</tr>
+
