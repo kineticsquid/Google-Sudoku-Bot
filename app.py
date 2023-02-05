@@ -187,12 +187,12 @@ def index():
     session_id = request.cookies.get('session_id')
     if session_id is None:
         session_id = str(uuid.uuid4())
-        resp.set_cookie('session_id', session_id)
     conversation_response = call_dialogflow('Hi', session_id)
     conversation_response = process_conversation_turn(conversation_response, session_id)
     add_to_transcript(session_id, 'bot', conversation_response[ANSWER])
     transcript_html = render_transcript(session_id)
     resp = make_response(render_template('index.html', transcript=transcript_html))
+    resp.set_cookie('session_id', session_id)
     return resp
 
 @sock_app.route('/ws')
