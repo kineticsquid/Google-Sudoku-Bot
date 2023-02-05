@@ -2,7 +2,7 @@
 Bot to solve Sudoku puzzles
 """
 import os
-from socket import IPV6_DONTFRAG
+from flask_sock import Sock
 import sys
 import logging
 from twilio.rest import Client
@@ -23,6 +23,7 @@ import image_utils
 import re
 from datetime import datetime
 import time
+import uuid
 
 PROJECT_ID = 'cloud-run-stuff'
 
@@ -134,6 +135,7 @@ test_value = runtime_cache.delete('/test/test')
 
 # pylint: disable=C0103
 flask_app = Flask(__name__)
+sock_app = Sock(flask_app)
 logging.basicConfig(level=logging.INFO)
 
 def log(log_message):
@@ -180,21 +182,35 @@ def add_links(json_string):
         json_string = json_string.replace(match, match_with_link)
     return json_string
 
-@flask_app.route('/',methods = ['POST', 'GET'])
+@flask_app.route('/')
 def index():
-    session_id = request.headers['Host'].replace(':','.')
-    if request.method == 'GET':
-        conversation_response = call_dialogflow('Hi', session_id)
-        conversation_response = process_conversation_turn(conversation_response, session_id)
-        add_to_transcript(session_id, conversation_response, greeting=True)
-    else:
-        form = request.form
-        text = form.get('text_input')
-        conversation_response = call_dialogflow(text, session_id)
-        conversation_response = process_conversation_turn(conversation_response, session_id)
-        add_to_transcript(session_id, conversation_response)
+    session_id = request.cookies.get('session_id')
+    if session_id is None:
+        session_id = str(uuid.uuid4())
+        resp.set_cookie('session_id', session_id)
+    conversation_response = call_dialogflow('Hi', session_id)
+    conversation_response = process_conversation_turn(conversation_response, session_id)
+    add_to_transcript(session_id, 'bot', conversation_response[ANSWER])
     transcript_html = render_transcript(session_id)
-    return render_template('index.html', transcript=transcript_html)
+    resp = make_response(render_template('index.html', transcript=transcript_html))
+    return resp
+
+@sock_app.route('/ws')
+def echo(sock):
+    while True:
+        session_id = request.cookies.get('session_id')
+        input = sock.receive()
+        add_to_transcript(session_id, 'you', input)
+        transcript_html = render_transcript(session_id)
+        sock.send(transcript_html)
+        conversation_response = call_dialogflow(input, session_id)
+        conversation_response = process_conversation_turn(conversation_response, session_id, socket=sock)
+        add_to_transcript(session_id, 'bot', conversation_response[ANSWER], image_url=conversation_response.get(IMAGE_URL))
+        transcript_html = render_transcript(session_id)
+        sock.send(transcript_html)
+
+        # Need to add spew here, the refactor to combine with SMS routine
+        # Change to gunicorn
 
 @flask_app.route('/debug',methods = ['POST', 'GET'])
 def debug():
@@ -220,30 +236,24 @@ def debug():
         conversation_response = process_conversation_turn(conversation_response, session_id)
         response_json = json.dumps(conversation_response, indent=4)
         json_with_links = add_links(response_json)
-        add_to_transcript(session_id, conversation_response)
+        add_to_transcript(session_id, 'you', conversation_response[INPUT])
+        add_to_transcript(session_id, 'bot', conversation_response[ANSWER])
         return render_template('debug.html', input=text, response=json_with_links)
 
-def add_to_transcript(session_id, conversation_response, greeting=False):
+def add_to_transcript(session_id, who, text, image_url=None):
     transcript = get_transcript(session_id)
     if transcript is None:
         transcript = []
-    if not greeting:
-        transcript.append({
-            'who': 'you',
-            'text': conversation_response[INPUT],
-            'image': None
-        })
-    image_url = conversation_response.get(IMAGE_URL)
     if image_url is not None:
         transcript.append({
-            'who': 'bot',
-            'text': conversation_response[ANSWER],
+            'who': who,
+            'text': text,
             'image': image_url
         })
     else:
         transcript.append({
-            'who': 'bot',
-            'text': conversation_response[ANSWER],
+            'who': who,
+            'text': text,
             'image': None
         })
     save_transcript(session_id, transcript)
@@ -259,7 +269,11 @@ def render_transcript(session_id):
     transcript = get_transcript(session_id)
     html='<table>'
     for item in transcript:
-        html = '%s\n\t%s' % (html, render_template('transcript.html', who=item['who'], text=item['text'], image=item['image']))
+        with flask_app.app_context():
+            context = {'who': item['who'], 'text': item['text'], 'image' : item['image']}
+            rendered = render_template('transcript.html', **context)
+        html = '%s\n\t%s' % (html, rendered)
+        # html = '%s\n\t%s' % (html, render_template('transcript.html', who=item['who'], text=item['text'], image=item['image']))
     html = html + '\n</table>'
     return html
 
@@ -428,7 +442,7 @@ def call_dialogflow(text, session_id):
     log(json.dumps(conversation_response, indent=4))
     return conversation_response
 
-def process_conversation_turn(conversation_response, session_id):
+def process_conversation_turn(conversation_response, session_id, socket=None):
     print('Action: %s' % conversation_response[ACTION])
     if conversation_response[ACTION] == CALL_ME:
         conversation_response = call_me(conversation_response, session_id)
@@ -441,7 +455,7 @@ def process_conversation_turn(conversation_response, session_id):
     elif conversation_response[ACTION] == INPUT_NUMBER_LIST:
         conversation_response = handle_text_input(conversation_response, session_id)
     elif conversation_response[ACTION] == INPUT_URL:
-        conversation_response = handle_url_input(conversation_response, session_id)
+        conversation_response = handle_url_input(conversation_response, session_id, socket)
     elif conversation_response[ACTION] == ROW_COLUMN_HINT_PRE or conversation_response[ACTION] == ROW_COLUMN_HINT_POST:
         conversation_response = provide_hint(conversation_response, session_id)
     elif conversation_response[ACTION] == ROW_COLUMN_FIX_PRE or conversation_response[ACTION] == ROW_COLUMN_FIX_POST:
@@ -719,7 +733,7 @@ def provide_hint(conversation_response, session_id):
     
     return conversation_response
 
-def process_input_image(conversation_response, session_id, bw_input_puzzle_image):
+def process_input_image(conversation_response, session_id, bw_input_puzzle_image, socket):
 
     def process_image(done_event=None):
         height, width = bw_input_puzzle_image.shape
@@ -807,24 +821,32 @@ def process_input_image(conversation_response, session_id, bw_input_puzzle_image
         random_index = int(random.random() * len(responses))
         return responses[random_index]
 
-    def spew_messages(done_event):
-        send_sms(conversation_response, get_response_text_for(THISLL_JUST_BE_A_MINUTE) % get_response_text_for(INSULTING_NAME))
+    def spew_messages(done_event, from_number, socket):
+        message = '%s\n%s' % (get_response_text_for(THISLL_JUST_BE_A_MINUTE), get_response_text_for(INSULTING_NAME))
+        add_to_transcript(session_id, 'bot', message)
+        if from_number is not None:
+            send_sms(conversation_response, message)
+        elif socket is not None:
+            transcript_html = render_transcript(session_id)
+            socket.send(transcript_html)
         time.sleep(TIME_SLEEP_INTERVAL)
         while not done_event.is_set():
-            send_sms(conversation_response, "%s\n%s" % (random_response(), get_response_text_for(INSULTING_NAME)))
+            message = "%s\n%s" % (random_response(), get_response_text_for(INSULTING_NAME))
+            add_to_transcript(session_id, 'bot', message)
+            if from_number is not None:
+                send_sms(message)
+            elif socket is not None:
+                transcript_html = render_transcript(session_id)
+                socket.send(transcript_html)
             time.sleep(TIME_SLEEP_INTERVAL)
         return
 
     from_number = conversation_response.get('sms_from')
-    if from_number is not None:
-        # Meaning this is an SMS from Twilio
-        done = Event()
-        spew_thread = Thread(target=spew_messages, args=(done,))
-        # spew_thread.daemon = True
-        spew_thread.start()
-        process_image(done)
-    else:
-        process_image()
+    done = Event()
+    spew_thread = Thread(target=spew_messages, args=(done, from_number, socket))
+    # spew_thread.daemon = True
+    spew_thread.start()
+    process_image(done)
 
     conversation_response = provide_input_matrix(conversation_response, session_id)
     puzzle_input_matrix = get_context(session_id, PUZZLE_INPUT_MATRIX)
@@ -904,10 +926,9 @@ def process_text_input(conversation_response, session_id):
 def provide_input_matrix(conversation_response, session_id):
     input_image_id = get_context(session_id, INPUT_IMAGE_ID)
     if input_image_id is None:
-        input_image_id = session_id
+        input_image_id = '%s.%s' % (session_id, uuid.uuid4())
         set_context(session_id, INPUT_IMAGE_ID, input_image_id)
     filename = '%s.%s.png' % (input_image_id, 'input')
-
     input_image_url = get_context(session_id, PUZZLE_INPUT_IMAGE_URL)
     input_image_coordinates = get_context(session_id, PUZZLE_INPUT_IMAGE_COORDINATES)
     input_matrix = get_context(session_id, PUZZLE_INPUT_MATRIX)
@@ -980,7 +1001,7 @@ def solve_puzzle(conversation_response, session_id):
 
     return conversation_response
 
-def handle_url_input(conversation_response, session_id):
+def handle_url_input(conversation_response, session_id, socket):
     if get_context(session_id, PUZZLE_SOLUTION_MATRIX) is not None:
         set_response_text(conversation_response, [get_response_text_for(IVE_ALREADY_SOLVED_IT)])
     else:
@@ -1004,7 +1025,7 @@ def handle_url_input(conversation_response, session_id):
                         add_response_text(conversation_response,
                         [get_response_text_for(I_DONT_RECOGNIZE_YOUR_IMAGE)])
                     else:
-                        process_input_image(conversation_response, session_id, bw_input_puzzle_image)
+                        process_input_image(conversation_response, session_id, bw_input_puzzle_image, socket)
                 else:
                     log('%s error retreiving input image \'%s\'.' % (response.status_code, input_puzzle_url))
                     add_response_text(conversation_response,
@@ -1270,11 +1291,11 @@ def get_response_text_for(text_response_type):
         ]
     elif text_response_type == THISLL_JUST_BE_A_MINUTE:
         values = [
-            'OK, this\'ll just be a minute.\n%s',
-            'I got this, one moment.\n%s',
-            'Give me a second to work on this.\n%s',
-            'One moment please.\n%s',
-            'Right. Give me a minute to figure this out.\n%s'
+            'OK, this\'ll just be a minute.',
+            'I got this, one moment.',
+            'Give me a second to work on this.',
+            'One moment please.',
+            'Right. Give me a minute to figure this out.'
         ]
     elif text_response_type == IVE_ALREADY_SOLVED_IT:
         values = [

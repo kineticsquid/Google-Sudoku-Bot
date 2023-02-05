@@ -23,11 +23,9 @@
     });
     document.getElementById('input').onsubmit = ev => {
         ev.preventDefault();
-        let textField = document.getElementById('text_input');
-        socket.send(textField.value);
+        let textfield = document.getElementById('text_input');
+        socket.send(textfield.value);
         textField.value = '';
       };
-    let scroll_to_bottom = document.getElementById('transcript');
-    scroll_to_bottom.scrollTop = scroll_to_bottom.scrollHeight;
 </script>
   {% endblock %}
