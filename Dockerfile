@@ -16,4 +16,6 @@ COPY . .
 RUN date > /app/static/build.txt
 
 # Run app.py when the container launches
-ENTRYPOINT ["python", "app.py"]
+# ENTRYPOINT ["python", "app.py"]
+EXPOSE 8080
+CMD ["gunicorn"  , "-b", "0.0.0.0:8080", "wsgi_server:flask_app"]

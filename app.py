@@ -34,7 +34,7 @@ CHECK_VALUE = 'check.value'
 INPUT_UNKNOWN = 'input.unknown'
 WELCOME = 'welcome'
 DONT_CALL_ME_THAT = 'dont.call.me.that'
-DONT_CALL_ME_THAT_FALLBACK = 'dont.call.me.that.fallback'
+DONT_CALL_ME_THAT_FALLBACK = 'dontcallmethat.dontcallmethat-fallback'
 GIVE_ME_A_HINT = 'give.me.a.hint'
 GIVE_ME_THE_ANSWER = 'give.me.the.answer'
 GIVE_ME_THE_INPUT_PUZZLE = 'give.me.the.input.puzzle'
@@ -190,16 +190,41 @@ def index():
     conversation_response = call_dialogflow('Hi', session_id)
     conversation_response = process_conversation_turn(conversation_response, session_id)
     add_to_transcript(session_id, 'bot', conversation_response[ANSWER])
-    transcript_html = render_transcript(session_id)
-    resp = make_response(render_template('index.html', transcript=transcript_html))
+    transcript_html = render_transcript(session_id)    
+    host = request.host
+    # liklely need to add port
+    if '127.0.0.1' in host or '0.0.0.0' in host:
+        # means we're running locally or in an image locally
+        web_socket_url = "ws://%s/ws" % host
+    else:
+        # anything else means we're running on Cloud Run and we need wss
+        web_socket_url = "wss://%s/ws" % host
+    log('Web socket URL: ' + web_socket_url)
+
+    resp = make_response(render_template('index.html', transcript=transcript_html, url=web_socket_url))
     resp.set_cookie('session_id', session_id)
     return resp
 
 @sock_app.route('/ws')
 def echo(sock):
-    while True:
+    log('>>>>>>>>>>>>>>>>>>>> In websocket /ws')
+    remote_ip = sock.environ['REMOTE_ADDR']
+    remote_port = sock.environ['REMOTE_PORT']
+    server_name = sock.environ['SERVER_NAME']
+    server_port = sock.environ['SERVER_PORT']
+    log('Remote: %s:%s' % (remote_ip, remote_port))
+    log('Server: %s:%s' % (server_name, server_port))
+    try:
         session_id = request.cookies.get('session_id')
         input = sock.receive()
+        remote_ip = sock.environ['REMOTE_ADDR']
+        remote_port = sock.environ['REMOTE_PORT']
+        server_name = sock.environ['SERVER_NAME']
+        server_port = sock.environ['SERVER_PORT']
+        log('>>>>>>>>>>>>>>>>>>>> Websocket receive')
+        log('Remote: %s:%s' % (remote_ip, remote_port))
+        log('Server: %s:%s' % (server_name, server_port))
+        log('Data: %s' % input)
         add_to_transcript(session_id, 'you', input)
         transcript_html = render_transcript(session_id)
         sock.send(transcript_html)
@@ -208,6 +233,21 @@ def echo(sock):
         add_to_transcript(session_id, 'bot', conversation_response[ANSWER], image_url=conversation_response.get(IMAGE_URL))
         transcript_html = render_transcript(session_id)
         sock.send(transcript_html)
+    except Exception:
+        log(traceback.format_exc())
+        if sock.connected is False:
+            log('Socket connection terminated.')
+        else:
+            call_me = get_context(session_id, PUZZLE_CALL_ME)
+            if call_me is None:
+                call_me = get_response_text_for(INSULTING_NAME)
+            response = '%s %s' % (get_response_text_for(HUH), call_me)
+            add_to_transcript(session_id, 'bot', response)
+            transcript_html = render_transcript(session_id)
+            sock.send(transcript_html)
+    if sock.connected is True:
+        sock.close()
+
 
         # Need to add spew here, the refactor to combine with SMS routine
         # Change to gunicorn
@@ -1085,28 +1125,21 @@ def start_over(conversation_response, session_id):
 
 def call_me(conversation_response, session_id):
     new_call_me = None
-    person_entity = conversation_response[PARAMETERS].get(ENTITY_PERSON)
-    if person_entity is not None:
-        new_call_me = person_entity.get(ENTITY_PERSON_NAME)
-    if new_call_me is not None and len(new_call_me) > 0:
+    input_text = conversation_response[INPUT]
+    if input_text is not None and len(input_text) > 0:
+        found = input_text.find('all me')
+        if found > 0:
+            new_call_me = input_text[found+6:len(input_text)]
+            found = new_call_me.find(',')
+            if found > 0:
+                new_call_me = new_call_me[0:found]
+        else: 
+            new_call_me = input_text
+        new_call_me = new_call_me.strip()
         set_context(session_id, PUZZLE_CALL_ME, new_call_me)
         set_response_text(conversation_response, [get_response_text_for(I_WILL_NOW_CALL_YOU) % new_call_me])
     else:
-        input_text = conversation_response[INPUT]
-        if input_text is not None and len(input_text) > 0:
-            found = input_text.find('all me')
-            if found > 0:
-                new_call_me = input_text[found+6:len(input_text)]
-                found = new_call_me.find(',')
-                if found > 0:
-                    new_call_me = new_call_me[0:found]
-            else: 
-                new_call_me = input_text
-            new_call_me = new_call_me.strip()
-            set_context(session_id, PUZZLE_CALL_ME, new_call_me)
-            set_response_text(conversation_response, [get_response_text_for(I_WILL_NOW_CALL_YOU) % new_call_me])
-        else:
-            set_response_text(conversation_response, [get_response_text_for(HUH)])
+        set_response_text(conversation_response, [get_response_text_for(HUH)])
     return conversation_response
 
 def call_me_fallback(conversation_response, session_id):

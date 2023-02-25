@@ -11,22 +11,29 @@
         <input autofocus type="text" id="text_input" name="text_input" placeholder="Your input text">
     </form>
 </div>
+<div hidden>
+    <input type="text" id="socket_url" value={{url}}>
+</div>
 <script>
     const update_transcript = (html) => {
         document.getElementById('transcript').innerHTML = html;
     };
-    const socket = new WebSocket('ws://' + location.host + '/ws');
-    socket.addEventListener('message', event => {
-        update_transcript(event.data);
-        let scroll_to_bottom = document.getElementById('transcript');
-        scroll_to_bottom.scrollTop = scroll_to_bottom.scrollHeight;
-    });
+    let socket_url = document.getElementById('socket_url');
     document.getElementById('input').onsubmit = ev => {
         ev.preventDefault();
-        let textField = document.getElementById('text_input');
-        socket.send(textField.value);
-        textField.value = '';
-      };
+        let textfield = document.getElementById('text_input');
+        input = textfield.value;
+		textfield.value = '';
+        let socket = new WebSocket(socket_url.value);
+        socket.onopen = function() {
+				socket.send(input);
+			}
+        socket.addEventListener('message', event => {
+            update_transcript(event.data);
+            let scroll_to_bottom = document.getElementById('transcript');
+            scroll_to_bottom.scrollTop = scroll_to_bottom.scrollHeight;
+        });
+    };
     let scroll_to_bottom = document.getElementById('transcript');
     scroll_to_bottom.scrollTop = scroll_to_bottom.scrollHeight;
 </script>
