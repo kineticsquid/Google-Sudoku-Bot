@@ -1,0 +1,126 @@
+<!DOCTYPE html> 
+<html>
+<head>
+    <title>Sudoku Bot</title>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="/redirect/style.css">
+    <!-- <link rel="stylesheet" href="https://us-central1-my-lambda-functions.cloudfunctions.net/redirect/style.css"> -->
+    <link rel="shortcut icon" href="https://i.imgur.com/HHbH5TJ.jpg">
+    <link rel="icon" href="https://i.imgur.com/HHbH5TJ.jpg">
+</head>
+</body>
+</html>
+<html> 
+<body> 
+<h1>Sudoku Bot</h1> 
+<div class="center-div" id="transcript">
+    <table>
+        <tr>
+            <td style="width: 25px;">
+                <img src="https://i.imgur.com/1p2XJr9.jpg" width="25" height="25" style="background-color:#aaaaaa;">
+            </td>
+            <td>
+                <div id="status_message">
+                    Just waking up. 
+                </div>
+            </td>
+        </tr>
+    </table>
+</div>
+<div class="center-input" id="input_form">
+    <form>
+        <input autofocus type="text" id="text_input" name="text_input" placeholder="Your input text">
+    </form>
+</div>
+<div hidden>
+    <input type="text" id="url" value="{{url}}">
+    <input type="text" id="web_socket_url" value={{web_socket_url}}>
+    <img src="https://i.imgur.com/1p2XJr9.jpg" width="25" height="25" style="background-color:#aaaaaa;">
+    <img src="https://i.imgur.com/PnPpzNd.jpg" width="25" height="25" style="background-color:#aaaaaa;">
+</div>
+<script> 
+    let socket_url = document.getElementById('web_socket_url').value;
+    let url = document.getElementById('url').value; 
+
+    const update_transcript = (html) => {
+        document.getElementById('transcript').innerHTML = html;
+    };
+
+    input_form = document.getElementById('input_form')
+    //Initiall hide this input form
+    input_form.style.display = 'none';
+
+    xmlhttp=new XMLHttpRequest();
+    xmlhttp.onreadystatechange=function() {
+        // this waits until the GET request below returns then redirects
+        if (xmlhttp.readyState==4) {
+            // Don't need this next statement anymore, not re-directing
+            // document.location.href = redirect_url; 
+            // Stop the message updates and ticks
+            clearInterval(tickInterval);
+            clearInterval(msgInterval);
+            // Make the input field visible
+            input_form.style.display = 'block';
+            let scroll_to_bottom = document.getElementById('transcript');
+            scroll_to_bottom.scrollTop = scroll_to_bottom.scrollHeight;
+        }
+    };
+
+    tickInterval = setInterval(function() {
+        let status_message = document.getElementById('status_message');  
+        status_message.innerHTML = status_message.innerText + '.'; 
+    }, 1000);
+
+    msgInterval = setInterval(function() {
+        status_message = document.getElementById('status_message');  
+        msg = get_msg(); 
+        status_message.innerHTML = msg;
+    }, 5000);
+
+    messages = Array(
+            "[yawn] Give me a minute while I get my shit together.",
+            "Coffee?",
+            "I can't find my socks.",
+            "Patience, young padawan.",
+            "Sorry, this is taking longer than I thought.",
+            "Can we eat while we wait?",
+            "Still feeling a bit woozy from last night.",
+            "Did I already ask for coffee?",
+            "I need more bacon!"
+        );
+
+    function get_msg () {
+        if (messages.length == 0) {
+            msg = "Aspeti!";
+        } else {
+            random_index = Math.floor(Math.random() * messages.length);
+            msg = messages[random_index];
+            messages = messages.slice(0, random_index).concat(messages.slice(random_index+1));
+        };
+        return msg;
+    };
+
+    xmlhttp.open("GET", url, true);
+    xmlhttp.send(); 
+
+    document.getElementById('input_form').onsubmit = ev => {
+        ev.preventDefault();
+        let textfield = document.getElementById('text_input');
+        input = textfield.value;
+		textfield.value = '';
+        let socket = new WebSocket(socket_url);
+        socket.onopen = function() {
+				socket.send(input);
+			}
+        socket.addEventListener('message', event => {
+            update_transcript(event.data);
+            let scroll_to_bottom = document.getElementById('transcript');
+            scroll_to_bottom.scrollTop = scroll_to_bottom.scrollHeight;
+        });
+    };
+
+</script> 
+</body> 
+</html>

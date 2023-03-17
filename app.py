@@ -2,12 +2,12 @@
 Bot to solve Sudoku puzzles
 """
 import os
+from flask import Flask, request, jsonify, render_template, Response, abort, redirect, url_for, make_response
 from flask_sock import Sock
 import sys
 import logging
 from twilio.rest import Client
 from twilio.twiml.messaging_response import MessagingResponse
-from flask import Flask, request, jsonify, render_template, Response, abort, redirect, url_for, make_response
 from threading import Thread, Event
 import random
 import requests

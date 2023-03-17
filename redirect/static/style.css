@@ -1,0 +1,52 @@
+/* style.css
+ * This file provides css styles.
+ */
+
+ body,html {
+	background-color: #6b7b84;
+	font-family: monospace;
+	font-size:large;
+  min-width:600px; 
+  min-height: 800px;
+}
+
+h1 {
+  text-align: center;
+}
+
+.center-div {
+  margin: auto;
+  height:600px;
+  width:500px;
+  overflow:auto;
+  background-color:#aaaaaa;
+  padding:10px;
+  border: 2px solid black;
+  overflow-y: scroll;
+}
+
+.center-input {
+  text-align: center; 
+  padding:20px 10px;
+  margin:auto;
+}
+
+table {
+  width:100%;
+  border: none;
+}
+
+td {
+  padding: 10px; 
+  vertical-align: top;
+}
+
+input {
+  width: 500px;
+  box-sizing: border-box;
+  background-color: #f8f8f8;
+  resize: none;
+  font-family: monospace;
+  font-size: large;
+}
+
