@@ -2,8 +2,10 @@
 
 {% block content %}
 <h1>Sudoku Bot</h1>  
-<div class="center-div" id="transcript">
-    {{ transcript|safe }}
+<div class="center-div" id="display-area">
+    <table id="transcript">
+        {{ transcript | safe}}
+    </table>
 </div>
    
 <div class="center-input">
@@ -13,10 +15,16 @@
 </div>
 <div hidden>
     <input type="text" id="socket_url" value={{url}}>
+    <img src="https://i.imgur.com/1p2XJr9.jpg" width="25" height="25" style="background-color:#aaaaaa;">
+    <img src="https://i.imgur.com/PnPpzNd.jpg" width="25" height="25" style="background-color:#aaaaaa;">
 </div>
 <script>
     const update_transcript = (html) => {
         document.getElementById('transcript').innerHTML = html;
+        scroll_to_bottom = document.getElementById('display-area');
+        scroll_to_bottom.scrollTop = scroll_to_bottom.scrollHeight;
+        input_field = document.getElementById('text_input')
+        input_field.focus()
     };
     let socket_url = document.getElementById('socket_url');
     document.getElementById('input').onsubmit = ev => {
@@ -30,11 +38,12 @@
 			}
         socket.addEventListener('message', event => {
             update_transcript(event.data);
-            let scroll_to_bottom = document.getElementById('transcript');
-            scroll_to_bottom.scrollTop = scroll_to_bottom.scrollHeight;
+
         });
     };
-    let scroll_to_bottom = document.getElementById('transcript');
+    scroll_to_bottom = document.getElementById('display-area');
     scroll_to_bottom.scrollTop = scroll_to_bottom.scrollHeight;
+    input_field = document.getElementById('text_input')
+    input_field.focus()
 </script>
   {% endblock %}

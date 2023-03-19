@@ -59,7 +59,7 @@ def index():
     html = html.replace('{{web_socket_url}}', WEB_SOCKET_URL)
     return Response(html, mimetype='text/html')
 
-def redirect(request):
+def ui(request):
     log('Starting function %s' % sys.argv[0])
     log('Python: ' + sys.version)
     try:
@@ -74,6 +74,7 @@ def redirect(request):
             contents = file.read()
             file.close()
             mimetype = mimetypes.MimeTypes().guess_type(filename)[0]
+            log('returning file: %s - mimetype: %s' % (filename, mimetype))
             return contents, 200, {'Content-Type': mimetype}
         except FileNotFoundError:
             abort(404)

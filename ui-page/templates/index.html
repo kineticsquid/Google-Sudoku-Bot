@@ -5,8 +5,8 @@
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" href="/redirect/style.css">
-    <!-- <link rel="stylesheet" href="https://us-central1-my-lambda-functions.cloudfunctions.net/redirect/style.css"> -->
+    <!-- <link rel="stylesheet" href="/redirect/style.css"> -->
+    <link rel="stylesheet" href="https://us-central1-my-lambda-functions.cloudfunctions.net/sudoku-bot-ui-page/style.css">
     <link rel="shortcut icon" href="https://i.imgur.com/HHbH5TJ.jpg">
     <link rel="icon" href="https://i.imgur.com/HHbH5TJ.jpg">
 </head>
@@ -15,18 +15,21 @@
 <html> 
 <body> 
 <h1>Sudoku Bot</h1> 
-<div class="center-div" id="transcript">
-    <table>
-        <tr>
-            <td style="width: 25px;">
-                <img src="https://i.imgur.com/1p2XJr9.jpg" width="25" height="25" style="background-color:#aaaaaa;">
-            </td>
-            <td>
-                <div id="status_message">
-                    Just waking up. 
-                </div>
-            </td>
-        </tr>
+<div class="center-div" id="display-area">
+    <table id="status">
+            <tr>
+                <td style="width: 25px;">
+                    <img src="https://i.imgur.com/1p2XJr9.jpg" width="25" height="25" style="background-color:#aaaaaa;">
+                </td>
+                <td>
+                    <div id="status_message">
+                        Just waking up. 
+                    </div>
+                </td>
+            </tr>
+    </table>
+    <table id="transcript">
+        
     </table>
 </div>
 <div class="center-input" id="input_form">
@@ -63,8 +66,22 @@
             clearInterval(msgInterval);
             // Make the input field visible
             input_form.style.display = 'block';
-            let scroll_to_bottom = document.getElementById('transcript');
-            scroll_to_bottom.scrollTop = scroll_to_bottom.scrollHeight;
+
+            // Open socket connection
+            // send null input
+            // set transcript value
+            let socket = new WebSocket(socket_url);
+            socket.onopen = function() {
+                    socket.send('');
+                }
+            socket.addEventListener('message', event => {
+                update_transcript(event.data);
+                let scroll_to_bottom = document.getElementById('display-area');
+                scroll_to_bottom.scrollTop = scroll_to_bottom.scrollHeight;
+                // Put focus on input line
+                input_field = document.getElementById('text_input')
+                input_field.focus()
+            });
         }
     };
 
@@ -116,8 +133,10 @@
 			}
         socket.addEventListener('message', event => {
             update_transcript(event.data);
-            let scroll_to_bottom = document.getElementById('transcript');
+            let scroll_to_bottom = document.getElementById('display-area');
             scroll_to_bottom.scrollTop = scroll_to_bottom.scrollHeight;
+            input_field = document.getElementById('text_input')
+            input_field.focus()
         });
     };
 

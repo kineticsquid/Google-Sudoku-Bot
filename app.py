@@ -180,20 +180,24 @@ def add_links(json_string):
     for match in matches:
         match_with_link = "<a href=%s>%s</a>" % (match, match)
         json_string = json_string.replace(match, match_with_link)
-    return json_string
+    return json_string  
+
+def get_opening_response(session_id):
+    conversation_response = call_dialogflow('Hi', session_id)
+    conversation_response = process_conversation_turn(conversation_response, session_id)
+    add_to_transcript(session_id, 'bot', conversation_response[ANSWER])
+    transcript_html = render_transcript(session_id) 
+    return transcript_html
 
 @flask_app.route('/')
 def index():
     session_id = request.cookies.get('session_id')
     if session_id is None:
         session_id = str(uuid.uuid4())
-    conversation_response = call_dialogflow('Hi', session_id)
-    conversation_response = process_conversation_turn(conversation_response, session_id)
-    add_to_transcript(session_id, 'bot', conversation_response[ANSWER])
-    transcript_html = render_transcript(session_id)    
+    transcript_html = get_opening_response(session_id)   
     host = request.host
     # liklely need to add port
-    if '127.0.0.1' in host or '0.0.0.0' in host:
+    if '127.0.0.1' in host or '0.0.0.0' in host or '192.168.1.121' in host:
         # means we're running locally or in an image locally
         web_socket_url = "ws://%s/ws" % host
     else:
@@ -205,34 +209,36 @@ def index():
     resp.set_cookie('session_id', session_id)
     return resp
 
-@sock_app.route('/ws')
-def echo(sock):
-    log('>>>>>>>>>>>>>>>>>>>> In websocket /ws')
+def log_sock_request(path, sock):
+    log('>>>>>>>>>>>>>>>>>>>> In websocket %s' % path)
     remote_ip = sock.environ['REMOTE_ADDR']
     remote_port = sock.environ['REMOTE_PORT']
     server_name = sock.environ['SERVER_NAME']
     server_port = sock.environ['SERVER_PORT']
     log('Remote: %s:%s' % (remote_ip, remote_port))
     log('Server: %s:%s' % (server_name, server_port))
+    log('Data: %s' % input)
+
+@sock_app.route('/ws')
+def ws(sock):
     try:
         session_id = request.cookies.get('session_id')
         input = sock.receive()
-        remote_ip = sock.environ['REMOTE_ADDR']
-        remote_port = sock.environ['REMOTE_PORT']
-        server_name = sock.environ['SERVER_NAME']
-        server_port = sock.environ['SERVER_PORT']
-        log('>>>>>>>>>>>>>>>>>>>> Websocket receive')
-        log('Remote: %s:%s' % (remote_ip, remote_port))
-        log('Server: %s:%s' % (server_name, server_port))
-        log('Data: %s' % input)
-        add_to_transcript(session_id, 'you', input)
-        transcript_html = render_transcript(session_id)
-        sock.send(transcript_html)
-        conversation_response = call_dialogflow(input, session_id)
-        conversation_response = process_conversation_turn(conversation_response, session_id, socket=sock)
-        add_to_transcript(session_id, 'bot', conversation_response[ANSWER], image_url=conversation_response.get(IMAGE_URL))
-        transcript_html = render_transcript(session_id)
-        sock.send(transcript_html)
+        log_sock_request('/ws', sock)
+        # No input on the web socket call means this is a call to start bot session, otherwise do 
+        # a conversation turn
+        if input == '':
+            transcript_html = get_opening_response(session_id) 
+            sock.send(transcript_html)
+        else:
+            add_to_transcript(session_id, 'you', input)
+            transcript_html = render_transcript(session_id)
+            sock.send(transcript_html)
+            conversation_response = call_dialogflow(input, session_id)
+            conversation_response = process_conversation_turn(conversation_response, session_id, socket=sock)
+            add_to_transcript(session_id, 'bot', conversation_response[ANSWER], image_url=conversation_response.get(IMAGE_URL))
+            transcript_html = render_transcript(session_id)
+            sock.send(transcript_html)
     except Exception:
         log(traceback.format_exc())
         if sock.connected is False:
@@ -307,14 +313,12 @@ def save_transcript(session_id, transcript):
 
 def render_transcript(session_id):
     transcript = get_transcript(session_id)
-    html='<table>'
+    html=''
     for item in transcript:
         with flask_app.app_context():
             context = {'who': item['who'], 'text': item['text'], 'image' : item['image']}
             rendered = render_template('transcript.html', **context)
         html = '%s\n\t%s' % (html, rendered)
-        # html = '%s\n\t%s' % (html, render_template('transcript.html', who=item['who'], text=item['text'], image=item['image']))
-    html = html + '\n</table>'
     return html
 
 @flask_app.route('/sms',methods = ['POST', 'GET'])
@@ -406,6 +410,7 @@ def redis_content(file_path):
         matrix_image_names = []
         for entry in matrix_image_names_as_bytes:
             matrix_image_names.append(entry.decode('utf-8'))
+        matrix_image_names.sort()
         return render_template('redis.html', files=matrix_image_names, title='Redis cache content')
     else:
         url_file_path = urllib.parse.quote("/%s" % file_path)
@@ -887,6 +892,8 @@ def process_input_image(conversation_response, session_id, bw_input_puzzle_image
     # spew_thread.daemon = True
     spew_thread.start()
     process_image(done)
+    # remove old input image ID if there is one
+    delete_context(session_id, INPUT_IMAGE_ID)
 
     conversation_response = provide_input_matrix(conversation_response, session_id)
     puzzle_input_matrix = get_context(session_id, PUZZLE_INPUT_MATRIX)

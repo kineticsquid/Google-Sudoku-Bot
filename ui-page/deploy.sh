@@ -3,4 +3,4 @@
 echo 'Be sure to "gcloud auth login" first'
 
 cd ../.vscode
-./deploy-redirect.sh
+./deploy-ui-page.sh
