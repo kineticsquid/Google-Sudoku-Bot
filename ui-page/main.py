@@ -6,13 +6,16 @@ fav_bot.jpg:    https://i.imgur.com/HHbH5TJ.jpg
 """
 import sys
 import time
-from flask import Response, abort, Flask, request, render_template
+from flask import Response, abort, Flask, request, render_template, make_response
 import logging
 import os
 import mimetypes
+import uuid
+import datetime
 
 URL = os.environ.get('URL', None)
-WEB_SOCKET_URL = os.environ.get('WEB_SOCKET_URL', None)
+SOCKET_URL = os.environ.get('SOCKET_URL', None)
+UPLOADER_URL = os.environ.get('UPLOADER_URL', None)
 
 flask_app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -25,18 +28,23 @@ def log(log_message):
 
 @flask_app.route('/')
 def flask_index():
-    host = request.host
-    # liklely need to add port
-    if '127.0.0.1' in host or '0.0.0.0' in host:
-        # means we're running locally or in an image locally
-        web_socket_url = "ws://%s/ws" % host
-    else:
-        # anything else means we're running on Cloud Run and we need wss
-        web_socket_url = "wss://%s/ws" % host
-    web_socket_url = WEB_SOCKET_URL
-    log('Web socket URL: ' + web_socket_url)
+    session_id = request.cookies.get('session_id')
+    if session_id is None:
+        session_id = str(uuid.uuid4())
+    log('URL to load: ' + URL)
+    log('Web socket URL: ' + SOCKET_URL)
+    log('Uploader URL:  ' + UPLOADER_URL)
+    print("Cookies: %s" % request.cookies)
 
-    return render_template('index.html', url=URL, web_socket_url=web_socket_url)
+    resp = make_response(render_template('index.html', 
+                                         url=URL, 
+                                         socket_url=SOCKET_URL, 
+                                         uploader_url=UPLOADER_URL, 
+                                         session_id=session_id))
+     # set a cookie expiration date of 1 day
+    expire_date = datetime.datetime.now() + datetime.timedelta(days=1)
+    resp.set_cookie('session_id', session_id, expires=expire_date)
+    return resp
 
 # This is to return static files
 @flask_app.route('/redirect/<path:file_path>')
@@ -51,22 +59,18 @@ def flask_file(file_path):
     except FileNotFoundError:
         abort(404)
 
-def index():
-    file = open('templates/index.html', 'r')
-    html = file.read()
-    file.close()
-    html = html.replace('{{url}}', URL)
-    html = html.replace('{{web_socket_url}}', WEB_SOCKET_URL)
-    return Response(html, mimetype='text/html')
-
 def ui(request):
     log('Starting function %s' % sys.argv[0])
     log('Python: ' + sys.version)
+    print("Cookies: %s" % request.cookies)
     try:
         path = request.path
     except Exception as e:
         path = None
     log("Path: %s" % path)
+    session_id = request.cookies.get('session_id')
+    if session_id is None:
+        session_id = str(uuid.uuid4())
     if path != None and len(path) > 1:
         filename = 'static' + path
         try:
@@ -79,8 +83,16 @@ def ui(request):
         except FileNotFoundError:
             abort(404)
     else:
-        html = index()
-        return html
+        # html = index()
+        resp = make_response(render_template('index.html', 
+                                             url=URL, 
+                                             socket_url=SOCKET_URL, 
+                                             uploader_url=UPLOADER_URL, 
+                                             session_id=session_id))
+        # set a cookie expiration date of 1 day
+        expire_date = datetime.datetime.now() + datetime.timedelta(days=1)
+        resp.set_cookie('session_id', session_id, expires=expire_date)
+        return resp
 
 if __name__ == '__main__':
     flask_app.run(debug=False, port='8090', host='0.0.0.0')

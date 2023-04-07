@@ -21,7 +21,7 @@ import cv2
 import numpy as np
 import image_utils
 import re
-from datetime import datetime
+import datetime
 import time
 import uuid
 
@@ -40,6 +40,7 @@ GIVE_ME_THE_ANSWER = 'give.me.the.answer'
 GIVE_ME_THE_INPUT_PUZZLE = 'give.me.the.input.puzzle'
 INPUT_NUMBER_LIST = 'input.number.list'
 INPUT_URL = 'input.url'
+INPUT_FILE = 'input.file'
 I_HAVE_A_PUZZLE = 'i.have.a.puzzle'
 NEGATIVE_RESPONSE = 'negative.response'
 POSITIVE_RESPONSE = 'positive.response'
@@ -149,18 +150,19 @@ def log(log_message):
 def do_something_whenever_a_request_comes_in():
     r = request
     log('>>>>>>>>>>>>>>>>>>>> %s %s' % (r.method, r.url))
-    headers = r.headers
-    if len(headers) > 0:
-        log('Request headers: \n%s' % headers)
-    args = r.args
-    if len(args) > 0:
-        log('Request query parameters: \n%s' % args)
-    values = r.values
-    if len(values) > 0:
-        log('Request values: \n%s' % values)
-    data = r.data
-    if len(data) > 0:
-        log('Data payload: \n%s' % data)
+    if r.path != '/heartbeat':
+        headers = r.headers
+        if len(headers) > 0:
+            log('Request headers: \n%s' % headers)
+        args = r.args
+        if len(args) > 0:
+            log('Request query parameters: \n%s' % args)
+        values = r.values
+        if len(values) > 0:
+            log('Request values: \n%s' % values)
+        data = r.data
+        if len(data) > 0:
+            log('Data payload: \n%s' % data)
 
 @flask_app.after_request
 def do_something_after_a_request_finishes(response):
@@ -197,16 +199,27 @@ def index():
     transcript_html = get_opening_response(session_id)   
     host = request.host
     # liklely need to add port
-    if '127.0.0.1' in host or '0.0.0.0' in host or '192.168.1.121' in host:
+    if '0.0.' in host or '192.168.1.' in host:
         # means we're running locally or in an image locally
-        web_socket_url = "ws://%s/ws" % host
+        url= "http://%s/heartbeat" % host
+        socket_url = "ws://%s/ws" % host
+        uploader_url = "ws://%s/uploader" % host
     else:
         # anything else means we're running on Cloud Run and we need wss
-        web_socket_url = "wss://%s/ws" % host
-    log('Web socket URL: ' + web_socket_url)
+        url= "https://%s/heartbeat" % host
+        socket_url = "wss://%s/ws" % host
+        uploader_url = "wss://%s/uploader" % host
+    log('Web socket URL: ' + socket_url)
 
-    resp = make_response(render_template('index.html', transcript=transcript_html, url=web_socket_url))
-    resp.set_cookie('session_id', session_id)
+    resp = make_response(render_template('index.html', 
+                                         transcript=transcript_html, 
+                                         url=url,
+                                         socket_url=socket_url, 
+                                         uploader_url= uploader_url, 
+                                         session_id=session_id))
+    # set a cookie expiration date of 1 day
+    expire_date = datetime.datetime.now() + datetime.timedelta(days=1)
+    resp.set_cookie('session_id', session_id, expires=expire_date)
     return resp
 
 def log_sock_request(path, sock):
@@ -219,12 +232,63 @@ def log_sock_request(path, sock):
     log('Server: %s:%s' % (server_name, server_port))
     log('Data: %s' % input)
 
+@sock_app.route('/uploader')
+def uploader(sock):
+    try:
+        log_sock_request('/uploader', sock)
+        input_str = sock.receive()
+        input_json = json.loads(input_str)
+        filename = input_json['filename']
+        session_id = input_json['session_id']
+        image_contents = sock.receive()
+        log_sock_request('/uploader - file %s' % filename, sock)
+        call_me = get_context(session_id, PUZZLE_CALL_ME)
+        if call_me is None:
+            call_me = get_response_text_for(INSULTING_NAME)
+        add_to_transcript(session_id, 'bot', 'I have your file \'%s\'. %s ' % (filename, call_me))
+        transcript_html = render_transcript(session_id)
+        sock.send(transcript_html)
+        conversation_response = {
+            'input': filename,
+            'intent': INPUT_FILE,
+            'confidence': None,
+            'answer': '',
+            'action': None,
+            'parameters': None
+        }
+        process_uploaded_file(conversation_response, session_id, image_contents, sock)
+        answer = conversation_response[ANSWER]
+        if answer is not None and len(answer) > 0:
+            if get_context(session_id, PUZZLE_CALL_ME) is not None:
+                add_response_text(conversation_response, [get_context(session_id, PUZZLE_CALL_ME)])
+            else:
+                add_response_text(conversation_response, [get_response_text_for(INSULTING_NAME)])
+        add_to_transcript(session_id, 'bot', conversation_response[ANSWER], image_url=conversation_response.get(IMAGE_URL))
+        transcript_html = render_transcript(session_id)
+        sock.send(transcript_html)
+    except Exception:
+        log(traceback.format_exc())
+        if sock.connected is False:
+            log('Socket connection terminated.')
+        else:
+            call_me = get_context(session_id, PUZZLE_CALL_ME)
+            if call_me is None:
+                call_me = get_response_text_for(INSULTING_NAME)
+            response = '%s %s' % (get_response_text_for(HUH), call_me)
+            add_to_transcript(session_id, 'bot', response)
+            transcript_html = render_transcript(session_id)
+            sock.send(transcript_html)
+    if sock.connected is True:
+        sock.close()
+
 @sock_app.route('/ws')
 def ws(sock):
     try:
-        session_id = request.cookies.get('session_id')
-        input = sock.receive()
         log_sock_request('/ws', sock)
+        input_str = sock.receive()
+        input_json = json.loads(input_str)
+        input = input_json['input']
+        session_id = input_json['session_id']
         # No input on the web socket call means this is a call to start bot session, otherwise do 
         # a conversation turn
         if input == '':
@@ -254,9 +318,6 @@ def ws(sock):
     if sock.connected is True:
         sock.close()
 
-
-        # Need to add spew here, the refactor to combine with SMS routine
-        # Change to gunicorn
 
 @flask_app.route('/debug',methods = ['POST', 'GET'])
 def debug():
@@ -385,7 +446,7 @@ def sms_retry():
 
 @flask_app.route('/favicon.ico')
 def favicon():
-    return flask_app.send_static_file('favicon-96x96.png')
+    return flask_app.send_static_file('/images/favicon-96x96.png')
 
 @flask_app.route('/build', methods=['GET', 'POST'])
 def build():
@@ -401,6 +462,10 @@ def build():
 def generate_build_stamp():
     from datetime import date
     return 'Development build - %s' % date.today().strftime('%m/%d/%y')
+
+@flask_app.route('/heartbeat', methods=['GET', 'POST'])
+def heartbeat():
+    return 'Heartbeat', 200
 
 @flask_app.route('/redis', defaults={'file_path': ''})
 @flask_app.route('/redis/<path:file_path>')
@@ -434,7 +499,6 @@ def clear_redis():
         runtime_cache.delete(key)
     # return Response('Removed %s redis entries' % number_of_entries, mimetype='text/text', status=200)
     return 'Removed %s redis entries' % number_of_entries
-
 
 def call_dialogflow(text, session_id):
     log('Session %s calling DialogFlow with \'%s\'.' % (session_id, text))
@@ -488,7 +552,7 @@ def call_dialogflow(text, session_id):
     return conversation_response
 
 def process_conversation_turn(conversation_response, session_id, socket=None):
-    print('Action: %s' % conversation_response[ACTION])
+    log('Action: %s' % conversation_response[ACTION])
     if conversation_response[ACTION] == CALL_ME:
         conversation_response = call_me(conversation_response, session_id)
     elif conversation_response[ACTION] == DONT_CALL_ME_THAT_FALLBACK:
@@ -797,7 +861,7 @@ def process_input_image(conversation_response, session_id, bw_input_puzzle_image
             image_utils.extract_matrix_from_image(image_to_process, flask_app=flask_app)
         log('!!!!!!!!!!!!! finished image processing')
         log('Input matrix: %s' % input_matrix)
-        now = datetime.now()
+        now = datetime.datetime.now()
         ocr_image_filename = urllib.parse.quote('/ocr-input/%s.%s.png' % (get_context(session_id, INPUT_IMAGE_ID),
                                                                             now.strftime('%H-%M-%S')))
         ocr_image_bytes = cv2.imencode('.png', image_with_ocr)
@@ -1081,6 +1145,25 @@ def handle_url_input(conversation_response, session_id, socket):
         else:
             add_response_text(conversation_response, [get_response_text_for(HUH)])          
 
+    return conversation_response
+
+def process_uploaded_file(conversation_response, session_id, image_file, socket):
+    if get_context(session_id, PUZZLE_SOLUTION_MATRIX) is not None:
+        set_response_text(conversation_response, [get_response_text_for(IVE_ALREADY_SOLVED_IT)])
+    else:
+        if get_context(session_id, PUZZLE_INPUT_MATRIX) is not None:
+            set_response_text(conversation_response, [get_response_text_for(I_ALREADY_HAVE_A_PUZZLE)])
+        else:
+            set_context(session_id, INPUT_IMAGE_ID, session_id)
+            log('!!!!!!!!!!!!! starting image processing')
+            image_bytearray = np.asarray(bytearray(image_file), dtype="uint8")
+            bw_input_puzzle_image = cv2.imdecode(image_bytearray, cv2.IMREAD_GRAYSCALE)
+            if bw_input_puzzle_image is None:
+                # This means the file or page was not a valid image
+                add_response_text(conversation_response,
+                [get_response_text_for(I_DONT_RECOGNIZE_YOUR_IMAGE)])
+            else:
+                process_input_image(conversation_response, session_id, bw_input_puzzle_image, socket)   
     return conversation_response
 
 def provide_solution_matrix(conversation_response, session_id):

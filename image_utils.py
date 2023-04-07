@@ -31,6 +31,7 @@ def extract_matrix_from_image(matrix_image, tesseract_config=None, image_type=No
             # OCR on the numbers in the cells. This is based on image type
             pre_processing_values = [
                 {'blur': 5, 'threshold': 66},
+                # {'blur': 5, 'threshold': 200},
                 {'blur': 5, 'threshold': 83}
             ]
         else:
@@ -884,8 +885,8 @@ Routine to add lines as found by HoughL lines to an input image, for debugging
 """
 
 
-def generate_image_with_lines(image, lines, color):
-    image_color_copy = cv2.cvtColor(image.copy(), cv2.COLOR_GRAY2RGB)
+def generate_image_with_lines(matrix_image, lines, color):
+    image_color_copy = cv2.cvtColor(matrix_image.copy(), cv2.COLOR_GRAY2RGB)
 
     thickness = 2
     for line in lines:

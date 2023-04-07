@@ -12,38 +12,108 @@
     <form id="input">
         <input autofocus type="text" id="text_input" name="text_input" placeholder="Your input text">
     </form>
+    <p>
+        Or, select/drag and drop and image file here
+    </p>
+    <form id="file-upload" enctype = "multipart/form-data">
+        <input class="file-input" type="file" accept="image/*" name="file_to_upload" id="file_to_upload" onchange="send_file()"/>
+    </form>  
 </div>
 <div hidden>
-    <input type="text" id="socket_url" value={{url}}>
+    <input type="text" id="url" value={{url}}>
+    <input type="text" id="socket_url" value={{socket_url}}>
+    <input type="text" id="uploader_url" value={{uploader_url}}>
+    <input type="text" id="session_id" value={{session_id}}>
     <img src="https://i.imgur.com/1p2XJr9.jpg" width="25" height="25" style="background-color:#aaaaaa;">
     <img src="https://i.imgur.com/PnPpzNd.jpg" width="25" height="25" style="background-color:#aaaaaa;">
 </div>
 <script>
-    const update_transcript = (html) => {
-        document.getElementById('transcript').innerHTML = html;
+    try {
+        // https://www.esegece.com/websockets/articles/features/225-websocket-upload-files-from-javascript
+        function send_file () {
+            file_to_upload = document.getElementById('file_to_upload').files[0]; 
+            uploader_url = document.getElementById('uploader_url').value
+            session_id = document.getElementById('session_id').value;
+            if (file_to_upload != '') {
+                reader = new FileReader();
+                rawData = new ArrayBuffer();            
+
+                reader.loadend = function() {
+                    // Don't need to do anything here
+                }
+
+                reader.onload = function(e) {
+                    // Once the file is loaded (read) open a socket, transmit it, and listen for an
+                    // updated dialog tanscript in return
+                    rawData = e.target.result;
+                    uploader_socket = new WebSocket(uploader_url);
+                    uploader_socket.binaryType = "arraybuffer";
+                    uploader_socket.onopen = function() {
+                        // Once open, first send name of file and session id
+                        json_input = {
+                            "session_id" : session_id,
+                            "filename": file_to_upload.name
+                        }
+                        // alert(JSON.stringify(json_input))
+                        uploader_socket.send(JSON.stringify(json_input))
+                        // then send image file contents
+                        uploader_socket.send(rawData);
+                    }
+                    uploader_socket.addEventListener('message', event => {
+                        // Listen for response, which will be an updated dialog transcript
+                        update_transcript(event.data);
+                        document.getElementById('file_to_upload').value = ''
+                    });
+                }
+                reader.readAsArrayBuffer(file_to_upload);
+            }
+            //Return focus to dialog inut field
+            input_field = document.getElementById('text_input')
+            input_field.focus()
+        };
+
+        // Routine to update the dialog transcript based on a conversation turn
+        function update_transcript (html) {
+            document.getElementById('transcript').innerHTML = html;
+            scroll_to_bottom = document.getElementById('display-area');
+            scroll_to_bottom.scrollTop = scroll_to_bottom.scrollHeight;
+            input_field = document.getElementById('text_input')
+            input_field.focus()
+        };
+
+
+        // Process a dialog turn when the user presses Enter or Return
+        document.getElementById('input').onsubmit = ev => {
+            ev.preventDefault();
+            textfield = document.getElementById('text_input');
+            human_input = textfield.value;
+            textfield.value = '';
+            session_id = document.getElementById('session_id').value;
+            json_input = {
+                "session_id" : session_id,
+                "input": human_input
+            }
+            // alert(JSON.stringify(json_input))
+            socket_url = document.getElementById('socket_url').value;
+            socket = new WebSocket(socket_url);
+            socket.onopen = function() {
+                    socket.send(JSON.stringify(json_input));
+                }
+            socket.addEventListener('message', event => {
+                update_transcript(event.data);
+
+            });
+        };
+
+        // Tidying up on initial display. Clear the file input field and scroll the dialog transcript to the
+        // bottom. Set focus to the text input field.
+        document.getElementById('file_to_upload').value = ''
         scroll_to_bottom = document.getElementById('display-area');
         scroll_to_bottom.scrollTop = scroll_to_bottom.scrollHeight;
         input_field = document.getElementById('text_input')
         input_field.focus()
-    };
-    let socket_url = document.getElementById('socket_url');
-    document.getElementById('input').onsubmit = ev => {
-        ev.preventDefault();
-        let textfield = document.getElementById('text_input');
-        input = textfield.value;
-		textfield.value = '';
-        let socket = new WebSocket(socket_url.value);
-        socket.onopen = function() {
-				socket.send(input);
-			}
-        socket.addEventListener('message', event => {
-            update_transcript(event.data);
-
-        });
-    };
-    scroll_to_bottom = document.getElementById('display-area');
-    scroll_to_bottom.scrollTop = scroll_to_bottom.scrollHeight;
-    input_field = document.getElementById('text_input')
-    input_field.focus()
+    } catch (error) {
+        alert('Error: ' + error)
+    }
 </script>
   {% endblock %}
