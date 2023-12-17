@@ -5,9 +5,10 @@
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <!-- <link rel="stylesheet" href="/redirect/style.css"> -->
+    <!-- Use this link stylesheet link for local testing-->
+    <!-- <link rel="stylesheet" href="/static/style.css"> -->
+    <!-- Use this link stylesheet link for runtime (make this switch before deploying)-->
     <link rel="stylesheet" href="https://us-central1-my-lambda-functions.cloudfunctions.net/sudoku-bot-ui-page/style.css">
-    <!-- <link rel="stylesheet" href="/style.css"> -->
     <link rel="shortcut icon" href="https://i.imgur.com/HHbH5TJ.jpg">
     <link rel="icon" href="https://i.imgur.com/HHbH5TJ.jpg">
 </head>
@@ -38,7 +39,7 @@
         <input autofocus type="text" id="text_input" name="text_input" placeholder="Your input text">
     </form>
     <p>
-        Or, select/drag and drop and image file here
+        Or, select or drag and drop and image file below
 
     </p>
     <form id="file-upload" enctype = "multipart/form-data">

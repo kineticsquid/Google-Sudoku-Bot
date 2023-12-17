@@ -2,36 +2,36 @@
  * This file provides css styles.
  */
 
- html { background-color: #8b9ba4; } 
+html { background-color: #8b9ba4; } 
 
- h1 {text-align: center;
- }
- 
- body {
-   font-family: monospace;
-   font-size: 120%;
-   background-color:  #6b7b84;
-   height: 95vh;
-   max-width: 375px;
-   margin: 0 auto;
- }
+h1 {text-align: center;
+}
+
+body {
+  font-family: monospace;
+  font-size: 120%;
+  background-color:  #6b7b84;
+  height: 95vh;
+  max-width: 375px;
+  margin: 0 auto;
+}
 
 .center-div {
   margin: auto;
   height:400px;
-  width: 320px;
+  width:350px;
   overflow:auto;
   background-color:#aaaaaa;
   padding:10px;
   border: 2px solid black;
   overflow-y: scroll;
-  font-size: large;
 }
 
 .center-input {
   text-align: center; 
   padding:20px 10px;
   margin:auto;
+  font-size: large;
 }
 
 table {
@@ -45,16 +45,11 @@ td {
 }
 
 input {
-  width: 340px;
+  width: 350px;
   box-sizing: border-box;
   background-color: #f8f8f8;
   resize: none;
   font-family: monospace;
   font-size: large;
 }
-
-p {
-  padding: 5px;
-}
-
 

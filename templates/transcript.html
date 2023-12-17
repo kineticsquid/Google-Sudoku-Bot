@@ -7,7 +7,7 @@
         {% endif %} 
     </td>
     <td>
-        {{text}}
+        {{text | safe}}
         {% if image != None %}
             <br>
             <a href="{{image}}" target="_blank">

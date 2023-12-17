@@ -1,5 +1,6 @@
 """
 Bot to solve Sudoku puzzles
+https://redirect.pizza/support/godaddy-forwarding-with-https-support
 """
 import os
 from flask import Flask, request, jsonify, render_template, Response, abort, redirect, url_for, make_response
@@ -85,6 +86,7 @@ REQUEST_HOST = 'request_host'
 INSULTING_NAME = 'INSULTING_NAME'
 I_HAVE_AN_ANSWER = 'I_HAVE_AN_ANSWER'
 I_CANT_SOLVE_YOUR_PUZZLE = 'I_CANT_SOLVE_YOUR_PUZZLE'
+TRY_THIS_APP = 'TRY_THIS_APP'
 I_CANT_FIND_YOUR_INPUT = 'I_CANT_FIND_YOUR_INPUT'
 I_WILL_NOW_CALL_YOU = 'I_WILL_NOW_CALL_YOU'
 I_DONT_HAVE_A_PUZZLE = 'I_DONT_HAVE_A_PUZZLE'
@@ -191,6 +193,10 @@ def get_opening_response(session_id):
     transcript_html = render_transcript(session_id) 
     return transcript_html
 
+@flask_app.route('/test')
+def test():
+    return render_template('index.html')
+
 @flask_app.route('/')
 def index():
     session_id = request.cookies.get('session_id')
@@ -219,7 +225,7 @@ def index():
                                          session_id=session_id))
     # set a cookie expiration date of 1 day
     expire_date = datetime.datetime.now() + datetime.timedelta(days=1)
-    resp.set_cookie('session_id', session_id, expires=expire_date)
+    resp.set_cookie('session_id', session_id, expires=expire_date, samesite=None)
     return resp
 
 def log_sock_request(path, sock):
@@ -465,7 +471,9 @@ def generate_build_stamp():
 
 @flask_app.route('/heartbeat', methods=['GET', 'POST'])
 def heartbeat():
-    return 'Heartbeat', 200
+    r = Response('Heartbeat', status=200)
+    r.headers['Access-Control-Allow-Origin'] = '*'
+    return r
 
 @flask_app.route('/redis', defaults={'file_path': ''})
 @flask_app.route('/redis/<path:file_path>')
@@ -978,20 +986,26 @@ def process_input_image(conversation_response, session_id, bw_input_puzzle_image
                 add_response_text(conversation_response, [get_response_text_for(I_HAVE_AN_ANSWER)])
         else:
             if from_number is not None:
-                send_sms(conversation_response, '%s\n%s' % (get_response_text_for(I_CANT_SOLVE_YOUR_PUZZLE),get_response_text_for(INSULTING_NAME)))
+                send_sms(conversation_response, '%s\n%s\n%s' % (get_response_text_for(I_CANT_SOLVE_YOUR_PUZZLE),
+                                                                get_response_text_for(TRY_THIS_APP),
+                                                                get_response_text_for(INSULTING_NAME)))
                 conversation_response[ANSWER] = ''
                 conversation_response[IMAGE_URL] = None
             else:
-                add_response_text(conversation_response, [get_response_text_for(I_CANT_SOLVE_YOUR_PUZZLE)])
+                add_response_text(conversation_response, [get_response_text_for(I_CANT_SOLVE_YOUR_PUZZLE),
+                                                          get_response_text_for(TRY_THIS_APP),])
             if get_context(session_id, PUZZLE_SOLUTION_MATRIX) is not None:
                 delete_context(session_id, PUZZLE_SOLUTION_MATRIX)
     else:
         if from_number is not None:
-            send_sms(conversation_response, '%s\n%s' % (get_response_text_for(I_CANT_SOLVE_YOUR_PUZZLE),get_response_text_for(INSULTING_NAME)))
+            send_sms(conversation_response, '%s\n%s\n%s' % (get_response_text_for(I_CANT_SOLVE_YOUR_PUZZLE),
+                                                            get_response_text_for(TRY_THIS_APP),    
+                                                            get_response_text_for(INSULTING_NAME)))
             conversation_response[ANSWER] = ''
             conversation_response[IMAGE_URL] = None
         else:
-            add_response_text(conversation_response, [get_response_text_for(I_CANT_SOLVE_YOUR_PUZZLE)])
+            add_response_text(conversation_response, [get_response_text_for(I_CANT_SOLVE_YOUR_PUZZLE),
+                                                      get_response_text_for(TRY_THIS_APP)])
         if get_context(session_id, PUZZLE_SOLUTION_MATRIX) is not None:
             delete_context(session_id, PUZZLE_SOLUTION_MATRIX)
 
@@ -1106,7 +1120,8 @@ def solve_puzzle(conversation_response, session_id):
                 set_context(session_id, PUZZLE_SOLUTION_MATRIX, results)
                 add_response_text(conversation_response, [get_response_text_for(IVE_SOLVED_YOUR_PUZZLE)])
             else:
-                add_response_text(conversation_response, [get_response_text_for(I_CANT_SOLVE_YOUR_PUZZLE)])
+                add_response_text(conversation_response, [get_response_text_for(I_CANT_SOLVE_YOUR_PUZZLE),
+                                                          get_response_text_for(TRY_THIS_APP)])
                 if get_context(session_id, PUZZLE_SOLUTION_MATRIX) is not None:
                     delete_context(session_id, PUZZLE_SOLUTION_MATRIX)   
 
@@ -1314,6 +1329,14 @@ def get_response_text_for(text_response_type):
             'Even Einstein couldn\'t solve your stupid puzzle.',
             'Get a real puzzle.',
             'Even with my super powers, your puzzle is beyond hope.'
+        ]
+    elif text_response_type == TRY_THIS_APP:
+        values = [
+            'Try this app, <a target="_blank" href="https://sudoku.johnkellerman.org">Sudoku App</a>.',
+            'For lightweights: <a target="_blank" href="https://sudoku.johnkellerman.org">Sudoku App</a>.',
+            'Slightly less taxing, <a target="_blank" href="https://sudoku.johnkellerman.org">Sudoku App</a>.',
+            'Even a caveman could do this, <a target="_blank" href="https://sudoku.johnkellerman.org">Sudoku App</a>.',
+            'Ted Lassiter recommends <a target="_blank" href="https://sudoku.johnkellerman.org">Sudoku App</a>.'
         ]
     elif text_response_type == I_DONT_HAVE_SOMETHING_TO_FIX:
         values = [

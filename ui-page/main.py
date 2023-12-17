@@ -47,7 +47,7 @@ def flask_index():
     return resp
 
 # This is to return static files
-@flask_app.route('/redirect/<path:file_path>')
+@flask_app.route('/static/<path:file_path>')
 def flask_file(file_path):
     filename = 'static/' + file_path
     try:
@@ -91,7 +91,7 @@ def ui(request):
                                              session_id=session_id))
         # set a cookie expiration date of 1 day
         expire_date = datetime.datetime.now() + datetime.timedelta(days=1)
-        resp.set_cookie('session_id', session_id, expires=expire_date)
+        resp.set_cookie('session_id', session_id, expires=expire_date, samesite=None)
         return resp
 
 if __name__ == '__main__':

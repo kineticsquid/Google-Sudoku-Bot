@@ -2,26 +2,30 @@
  * This file provides css styles.
  */
 
- body,html {
-	background-color: #6b7b84;
-	font-family: monospace;
-  min-width:500px; 
-  min-height: 600px;
-}
+ html { background-color: #8b9ba4; } 
 
-h1 {
-  text-align: center;
-}
+ h1 {text-align: center;
+ }
+ 
+ body {
+   font-family: monospace;
+   font-size: 120%;
+   background-color:  #6b7b84;
+   height: 95vh;
+   max-width: 375px;
+   margin: 0 auto;
+ }
 
 .center-div {
   margin: auto;
   height:400px;
-  width:400px;
+  width: 320px;
   overflow:auto;
   background-color:#aaaaaa;
   padding:10px;
   border: 2px solid black;
   overflow-y: scroll;
+  font-size: large;
 }
 
 .center-input {
@@ -41,10 +45,16 @@ td {
 }
 
 input {
-  width: 400px;
+  width: 340px;
   box-sizing: border-box;
   background-color: #f8f8f8;
   resize: none;
   font-family: monospace;
+  font-size: large;
 }
+
+p {
+  padding: 5px;
+}
+
 
