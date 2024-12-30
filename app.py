@@ -7,8 +7,6 @@ from flask import Flask, request, jsonify, render_template, Response, abort, red
 from flask_sock import Sock
 import sys
 import logging
-from twilio.rest import Client
-from twilio.twiml.messaging_response import MessagingResponse
 from threading import Thread, Event
 import random
 import requests
@@ -83,7 +81,7 @@ PUZZLE_CALL_ME = 'puzzle_call_me'
 INPUT_IMAGE_ID = 'input_image_id'
 REQUEST_HOST = 'request_host'
 
-INSULTING_NAME = 'INSULTING_NAME'
+TERM_OF_ADDRESS = 'TERM_OF_ADDRESS'
 I_HAVE_AN_ANSWER = 'I_HAVE_AN_ANSWER'
 I_CANT_SOLVE_YOUR_PUZZLE = 'I_CANT_SOLVE_YOUR_PUZZLE'
 TRY_THIS_APP = 'TRY_THIS_APP'
@@ -121,12 +119,6 @@ REDIS_HOST_URL = os.environ['REDIS_HOST']
 REDIS_PW = os.environ['REDIS_PW']
 REDIS_PORT = os.environ['REDIS_PORT']
 JWT_SECRET = os.environ['JWT_SECRET']
-# Your Account Sid and Auth Token from twilio.com/user/account
-TWILIO_ACCOUNT_SID = os.environ['TWILIO_ACCOUNT_SID']
-TWILIO_AUTH_TOKEN = os.environ['TWILIO_AUTH_TOKEN']
-TWILIO_PHONE_NUMBER = os.environ['TWILIO_PHONE_NUMBER']
-twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
-
 
 runtime_cache = redis.Redis(
     host=REDIS_HOST_URL,
@@ -202,6 +194,10 @@ def index():
     session_id = request.cookies.get('session_id')
     if session_id is None:
         session_id = str(uuid.uuid4())
+    term_of_address = get_context(session_id, PUZZLE_CALL_ME)
+    if term_of_address is None:
+        new_term_of_address = get_response_text_for(TERM_OF_ADDRESS)
+        set_context(session_id, PUZZLE_CALL_ME, new_term_of_address)
     transcript_html = get_opening_response(session_id)   
     host = request.host
     # liklely need to add port
@@ -250,7 +246,7 @@ def uploader(sock):
         log_sock_request('/uploader - file %s' % filename, sock)
         call_me = get_context(session_id, PUZZLE_CALL_ME)
         if call_me is None:
-            call_me = get_response_text_for(INSULTING_NAME)
+            call_me = get_response_text_for(TERM_OF_ADDRESS)
         add_to_transcript(session_id, 'bot', 'I have your file \'%s\'. %s ' % (filename, call_me))
         transcript_html = render_transcript(session_id)
         sock.send(transcript_html)
@@ -268,7 +264,7 @@ def uploader(sock):
             if get_context(session_id, PUZZLE_CALL_ME) is not None:
                 add_response_text(conversation_response, [get_context(session_id, PUZZLE_CALL_ME)])
             else:
-                add_response_text(conversation_response, [get_response_text_for(INSULTING_NAME)])
+                add_response_text(conversation_response, [get_response_text_for(TERM_OF_ADDRESS)])
         add_to_transcript(session_id, 'bot', conversation_response[ANSWER], image_url=conversation_response.get(IMAGE_URL))
         transcript_html = render_transcript(session_id)
         sock.send(transcript_html)
@@ -279,7 +275,7 @@ def uploader(sock):
         else:
             call_me = get_context(session_id, PUZZLE_CALL_ME)
             if call_me is None:
-                call_me = get_response_text_for(INSULTING_NAME)
+                call_me = get_response_text_for(TERM_OF_ADDRESS)
             response = '%s %s' % (get_response_text_for(HUH), call_me)
             add_to_transcript(session_id, 'bot', response)
             transcript_html = render_transcript(session_id)
@@ -298,6 +294,10 @@ def ws(sock):
         # No input on the web socket call means this is a call to start bot session, otherwise do 
         # a conversation turn
         if input == '':
+            term_of_address = get_context(session_id, PUZZLE_CALL_ME)
+            if term_of_address is None:
+                new_term_of_address = get_response_text_for(TERM_OF_ADDRESS)
+            set_context(session_id, PUZZLE_CALL_ME, new_term_of_address)
             transcript_html = get_opening_response(session_id) 
             sock.send(transcript_html)
         else:
@@ -316,7 +316,7 @@ def ws(sock):
         else:
             call_me = get_context(session_id, PUZZLE_CALL_ME)
             if call_me is None:
-                call_me = get_response_text_for(INSULTING_NAME)
+                call_me = get_response_text_for(TERM_OF_ADDRESS)
             response = '%s %s' % (get_response_text_for(HUH), call_me)
             add_to_transcript(session_id, 'bot', response)
             transcript_html = render_transcript(session_id)
@@ -387,68 +387,6 @@ def render_transcript(session_id):
             rendered = render_template('transcript.html', **context)
         html = '%s\n\t%s' % (html, rendered)
     return html
-
-@flask_app.route('/sms',methods = ['POST', 'GET'])
-def sms_reply():
-    values = request.values
-    resp = MessagingResponse()
-    if len(values) > 0:
-        body = values.get('Body')
-        from_number = values.get('From')
-        media_url = values.get('MediaUrl0')
-        session_id = from_number[1:]
-        if media_url is not None and len(media_url) > 0:
-            text = '%s. %s' % (body, media_url)
-        else: 
-            text = body
-        log('From: %s. Body: %s. Media URL: %s.' % (from_number, body, media_url))
-        conversation_response = call_dialogflow(text, session_id)
-        conversation_response['sms_from'] = from_number
-        conversation_response = process_conversation_turn(conversation_response, session_id)
-        msg = resp.message(conversation_response['answer'])
-        images = conversation_response.get(IMAGE_URL)
-        if images is not None:
-            if isinstance(images, list):
-                for i in images:
-                    msg.media(i)
-            else:
-                msg.media(images)
-    else:
-        resp.message('%s\n%s' % (get_response_text_for(I_CANT_HEAR_YOU),get_response_text_for(INSULTING_NAME)))
-    log('SMS Response:')
-    log(str(resp))
-    return str(resp)
-
-@flask_app.route('/sms-test',methods = ['POST', 'GET'])
-def sms_test():
-    resp = MessagingResponse()
-
-    from_number = '+19192446142'
-    media_url = 'https://i.imgur.com/hHzcWLq.png'
-    session_id = request.headers['Host'].replace(':','.')
-    text = media_url
-    conversation_response = call_dialogflow(text, session_id)
-    conversation_response['sms_from'] = from_number
-    conversation_response = process_conversation_turn(conversation_response, session_id)
-    response_json = json.dumps(conversation_response, indent=4)
-    json_with_links = add_links(response_json)
-    return render_template('index.html', input=text, response=json_with_links)
-
-@flask_app.route('/sms-retry',methods = ['POST', 'GET'])
-def sms_retry():
-    # Used for debugging when responses to Tiwlio exceed time limit.
-    values = request.values
-    resp = MessagingResponse()
-    if len(values) > 0:
-        body = values.get('Body')
-        from_number = values.get('From')
-        media_url = values.get('MediaUrl0')
-        resp.message('SMS Retry - From: %s. Body: %s. Media URL: %s.' % (from_number, body, media_url))
-    else:
-        resp.message('SMS Retry - no payload. Should never see this.')
-    log('SMS Retry Response:')
-    log(str(resp))
-    return str(resp)
 
 @flask_app.route('/favicon.ico')
 def favicon():
@@ -587,7 +525,7 @@ def process_conversation_turn(conversation_response, session_id, socket=None):
         if get_context(session_id, PUZZLE_CALL_ME) is not None:
             add_response_text(conversation_response, [get_context(session_id, PUZZLE_CALL_ME)])
         else:
-            add_response_text(conversation_response, [get_response_text_for(INSULTING_NAME)])
+            add_response_text(conversation_response, [get_response_text_for(TERM_OF_ADDRESS)])
     return conversation_response
 
 def ordinal_to_integer(entity):
@@ -939,20 +877,16 @@ def process_input_image(conversation_response, session_id, bw_input_puzzle_image
         return responses[random_index]
 
     def spew_messages(done_event, from_number, socket):
-        message = '%s\n%s' % (get_response_text_for(THISLL_JUST_BE_A_MINUTE), get_response_text_for(INSULTING_NAME))
+        message = '%s\n%s' % (get_response_text_for(THISLL_JUST_BE_A_MINUTE), get_response_text_for(TERM_OF_ADDRESS))
         add_to_transcript(session_id, 'bot', message)
-        if from_number is not None:
-            send_sms(conversation_response, message)
-        elif socket is not None:
+        if socket is not None:
             transcript_html = render_transcript(session_id)
             socket.send(transcript_html)
         time.sleep(TIME_SLEEP_INTERVAL)
         while not done_event.is_set():
-            message = "%s\n%s" % (random_response(), get_response_text_for(INSULTING_NAME))
+            message = "%s\n%s" % (random_response(), get_response_text_for(TERM_OF_ADDRESS))
             add_to_transcript(session_id, 'bot', message)
-            if from_number is not None:
-                send_sms(message)
-            elif socket is not None:
+            if socket is not None:
                 transcript_html = render_transcript(session_id)
                 socket.send(transcript_html)
             time.sleep(TIME_SLEEP_INTERVAL)
@@ -978,33 +912,14 @@ def process_input_image(conversation_response, session_id, bw_input_puzzle_image
         if response.status_code == 200:
             results = response.json()
             set_context(session_id, PUZZLE_SOLUTION_MATRIX, results)
-            if from_number is not None:
-                send_sms(conversation_response, '%s\n%s' % (get_response_text_for(I_HAVE_AN_ANSWER),get_response_text_for(INSULTING_NAME)))
-                conversation_response[ANSWER] = ''
-                conversation_response[IMAGE_URL] = None
-            else:
-                add_response_text(conversation_response, [get_response_text_for(I_HAVE_AN_ANSWER)])
+            add_response_text(conversation_response, [get_response_text_for(I_HAVE_AN_ANSWER)])
         else:
-            if from_number is not None:
-                send_sms(conversation_response, '%s\n%s\n%s' % (get_response_text_for(I_CANT_SOLVE_YOUR_PUZZLE),
-                                                                get_response_text_for(TRY_THIS_APP),
-                                                                get_response_text_for(INSULTING_NAME)))
-                conversation_response[ANSWER] = ''
-                conversation_response[IMAGE_URL] = None
-            else:
-                add_response_text(conversation_response, [get_response_text_for(I_CANT_SOLVE_YOUR_PUZZLE),
+            add_response_text(conversation_response, [get_response_text_for(I_CANT_SOLVE_YOUR_PUZZLE),
                                                           get_response_text_for(TRY_THIS_APP),])
             if get_context(session_id, PUZZLE_SOLUTION_MATRIX) is not None:
                 delete_context(session_id, PUZZLE_SOLUTION_MATRIX)
     else:
-        if from_number is not None:
-            send_sms(conversation_response, '%s\n%s\n%s' % (get_response_text_for(I_CANT_SOLVE_YOUR_PUZZLE),
-                                                            get_response_text_for(TRY_THIS_APP),    
-                                                            get_response_text_for(INSULTING_NAME)))
-            conversation_response[ANSWER] = ''
-            conversation_response[IMAGE_URL] = None
-        else:
-            add_response_text(conversation_response, [get_response_text_for(I_CANT_SOLVE_YOUR_PUZZLE),
+        add_response_text(conversation_response, [get_response_text_for(I_CANT_SOLVE_YOUR_PUZZLE),
                                                       get_response_text_for(TRY_THIS_APP)])
         if get_context(session_id, PUZZLE_SOLUTION_MATRIX) is not None:
             delete_context(session_id, PUZZLE_SOLUTION_MATRIX)
@@ -1301,10 +1216,10 @@ def delete_context(session_id, key):
     put_context_to_redis(session_id, context)
 
 def get_response_text_for(text_response_type):
-    if text_response_type == INSULTING_NAME:
+    if text_response_type == TERM_OF_ADDRESS:
         values = [
-            'Fartface', 'Dick nose', 'Butthead', 'Dumb ass', 'Bonehead',
-            'Dipshit', 'Shithead', 'Doofus']
+            'Beautiful', 'My Dear', 'Madam', 'Your Highness', 
+            'Countess', 'My Lady', 'Countessa', 'My Queen']
     elif text_response_type == TA_DA:
         values = ['Ta Da!', 'Viola!', 'Hold the applause', '[mic drop]', 'Woo Hoo!']
     elif text_response_type == I_CANT_HEAR_YOU:
@@ -1497,25 +1412,6 @@ def get_response_text_for(text_response_type):
         ]
     choice = int(random.random() * len(values))
     return values[choice]
-
-def send_sms(conversation_response, msg):
-    from_number = conversation_response.get('sms_from')
-    image_url = conversation_response.get(IMAGE_URL)
-    if from_number is not None:
-        message = twilio_client.messages.create(
-            body=msg,
-            from_=TWILIO_PHONE_NUMBER,
-            to=from_number
-            )
-        if image_url is not None:
-            message = twilio_client.messages.create(
-                from_=TWILIO_PHONE_NUMBER,
-                media_url=image_url,
-                to=from_number
-            )
-        return message.sid
-    else:
-        return None
 
 if __name__ == '__main__':
     server_port = os.environ.get('PORT', '8080')

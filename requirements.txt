@@ -1,7 +1,6 @@
 requests
 Flask
 redis
-twilio
 numpy
 matplotlib
 pytesseract

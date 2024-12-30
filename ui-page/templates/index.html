@@ -5,13 +5,21 @@
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <!-- Use this link stylesheet link for local testing-->
-    <!-- <link rel="stylesheet" href="/static/style.css"> -->
-    <!-- Use this link stylesheet link for runtime (make this switch before deploying)-->
+    <!-- To test locally use URL of type http://192.168.1.252:8080/, not 127.0.0.1 -->
+    <!-- The latter causes images to not display -->
     <link rel="stylesheet" href="https://us-central1-my-lambda-functions.cloudfunctions.net/sudoku-bot-ui-page/style.css">
     <link rel="shortcut icon" href="https://i.imgur.com/HHbH5TJ.jpg">
     <link rel="icon" href="https://i.imgur.com/HHbH5TJ.jpg">
 </head>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-QJVD4LWN0R"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-QJVD4LWN0R');
+</script>
 </body>
 </html>
 <html> 
