@@ -139,7 +139,6 @@ def log(log_message):
     else:
         print(log_message)
 
-
 @flask_app.before_request
 def do_something_whenever_a_request_comes_in():
     r = request
@@ -323,7 +322,6 @@ def ws(sock):
             sock.send(transcript_html)
     if sock.connected is True:
         sock.close()
-
 
 @flask_app.route('/debug',methods = ['POST', 'GET'])
 def debug():
@@ -674,6 +672,7 @@ def fix_input_matrix(conversation_response, session_id):
                     delete_context(session_id, PUZZLE_SOLUTION_MATRIX)
                     delete_context(session_id, PUZZLE_SOLUTION_IMAGE_URL)
                 conversation_response = provide_input_matrix(conversation_response, session_id)
+                conversation_response = solve_puzzle(conversation_response, session_id)
                 # conversation_response = handle_url_input(conversation_response, session_id)
             
     return conversation_response
@@ -964,10 +963,10 @@ def process_text_input(conversation_response, session_id):
     return conversation_response
 
 def provide_input_matrix(conversation_response, session_id):
-    input_image_id = get_context(session_id, INPUT_IMAGE_ID)
-    if input_image_id is None:
-        input_image_id = '%s.%s' % (session_id, uuid.uuid4())
-        set_context(session_id, INPUT_IMAGE_ID, input_image_id)
+    # input_image_id = get_context(session_id, INPUT_IMAGE_ID)
+    # if input_image_id is None:
+    input_image_id = '%s.%s' % (session_id, uuid.uuid4())
+    set_context(session_id, INPUT_IMAGE_ID, input_image_id)
     filename = '%s.%s.png' % (input_image_id, 'input')
     input_image_url = get_context(session_id, PUZZLE_INPUT_IMAGE_URL)
     input_image_coordinates = get_context(session_id, PUZZLE_INPUT_IMAGE_COORDINATES)
